@@ -1,0 +1,466 @@
+import { useState, useEffect } from 'react';
+import { Calendar } from '@/components/ui/calendar';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { supabase } from '@/integrations/supabase/client';
+import { Service, Barber, Appointment, WorkingHours } from '@/lib/types';
+import { format, addDays, isBefore, startOfDay } from 'date-fns';
+import { pt } from 'date-fns/locale';
+import { Calendar as CalendarIcon, Clock, User, Phone, Scissors, Check, MessageCircle } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+
+interface BookingFormProps {
+  onBack: () => void;
+}
+
+type AppointmentStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
+
+export function BookingForm({ onBack }: BookingFormProps) {
+  const { toast } = useToast();
+  const [step, setStep] = useState(1);
+  const [services, setServices] = useState<Service[]>([]);
+  const [barbers, setBarbers] = useState<Barber[]>([]);
+  const [existingAppointments, setExistingAppointments] = useState<Appointment[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
+  const [createdAppointment, setCreatedAppointment] = useState<Appointment | null>(null);
+  const [whatsappNumber, setWhatsappNumber] = useState('+258840000000');
+
+  const [formData, setFormData] = useState({
+    clientName: '',
+    clientPhone: '',
+    serviceId: '',
+    barberId: '',
+    appointmentDate: undefined as Date | undefined,
+    appointmentTime: '',
+  });
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  useEffect(() => {
+    if (formData.barberId && formData.appointmentDate) {
+      fetchAppointmentsForDay();
+    }
+  }, [formData.barberId, formData.appointmentDate]);
+
+  const fetchData = async () => {
+    const [servicesRes, barbersRes, settingsRes] = await Promise.all([
+      supabase.from('services').select('*').eq('active', true),
+      supabase.from('barbers').select('*').eq('active', true),
+      supabase.from('settings').select('*').limit(1).maybeSingle(),
+    ]);
+
+    if (servicesRes.data) setServices(servicesRes.data as Service[]);
+    if (barbersRes.data) {
+      const mappedBarbers = barbersRes.data.map(b => ({
+        ...b,
+        working_hours: b.working_hours as unknown as WorkingHours
+      }));
+      setBarbers(mappedBarbers);
+    }
+    if (settingsRes.data) setWhatsappNumber(settingsRes.data.whatsapp_number || '+258840000000');
+  };
+
+  const fetchAppointmentsForDay = async () => {
+    if (!formData.appointmentDate) return;
+
+    const { data } = await supabase
+      .from('appointments')
+      .select('*')
+      .eq('barber_id', formData.barberId)
+      .eq('appointment_date', format(formData.appointmentDate, 'yyyy-MM-dd'))
+      .neq('status', 'cancelled');
+
+    if (data) {
+      const mappedAppointments = data.map(a => ({
+        ...a,
+        status: a.status as AppointmentStatus
+      }));
+      setExistingAppointments(mappedAppointments);
+    }
+  };
+
+  const generateTimeSlots = () => {
+    const slots: string[] = [];
+    const selectedBarber = barbers.find(b => b.id === formData.barberId);
+    
+    if (!selectedBarber || !formData.appointmentDate) return slots;
+
+    const dayOfWeek = format(formData.appointmentDate, 'EEEE').toLowerCase() as keyof WorkingHours;
+    const dayHours = selectedBarber.working_hours[dayOfWeek];
+    
+    if (!dayHours) return slots;
+
+    const [startHour, startMin] = dayHours.start.split(':').map(Number);
+    const [endHour, endMin] = dayHours.end.split(':').map(Number);
+
+    const selectedService = services.find(s => s.id === formData.serviceId);
+    const serviceDuration = selectedService?.duration || 30;
+
+    const bookedTimes = existingAppointments.map(a => a.appointment_time);
+
+    for (let hour = startHour; hour < endHour; hour++) {
+      for (let min = 0; min < 60; min += 30) {
+        if (hour === startHour && min < startMin) continue;
+        if (hour === endHour - 1 && min + serviceDuration > 60 - endMin) continue;
+
+        const timeStr = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
+        
+        if (!bookedTimes.includes(timeStr)) {
+          slots.push(timeStr);
+        }
+      }
+    }
+
+    return slots;
+  };
+
+  const handleSubmit = async () => {
+    if (!formData.clientName || !formData.clientPhone || !formData.serviceId || 
+        !formData.barberId || !formData.appointmentDate || !formData.appointmentTime) {
+      toast({
+        title: 'Erro',
+        description: 'Por favor, preencha todos os campos.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const { data, error } = await supabase
+        .from('appointments')
+        .insert({
+          client_name: formData.clientName.trim(),
+          client_phone: formData.clientPhone.trim(),
+          service_id: formData.serviceId,
+          barber_id: formData.barberId,
+          appointment_date: format(formData.appointmentDate, 'yyyy-MM-dd'),
+          appointment_time: formData.appointmentTime,
+          status: 'pending',
+        })
+        .select('*')
+        .single();
+
+      if (error) throw error;
+
+      const mappedAppointment: Appointment = {
+        ...data,
+        notes: data.notes || null,
+        status: data.status as AppointmentStatus
+      };
+      
+      setCreatedAppointment(mappedAppointment);
+      setIsSuccess(true);
+
+      toast({
+        title: 'Agendamento realizado!',
+        description: 'Seu horário foi reservado com sucesso.',
+      });
+    } catch (error) {
+      console.error('Error creating appointment:', error);
+      toast({
+        title: 'Erro ao agendar',
+        description: 'Não foi possível realizar o agendamento. Tente novamente.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getWhatsAppLink = () => {
+    if (!createdAppointment) return '#';
+
+    const barberName = barbers.find(b => b.id === createdAppointment.barber_id)?.name;
+    const serviceName = services.find(s => s.id === createdAppointment.service_id)?.name;
+    const formattedDate = format(new Date(createdAppointment.appointment_date), "dd 'de' MMMM", { locale: pt });
+
+    const message = encodeURIComponent(
+      `Olá! Gostaria de confirmar meu agendamento:\n\n` +
+      `👤 Nome: ${createdAppointment.client_name}\n` +
+      `📱 Telefone: ${createdAppointment.client_phone}\n` +
+      `✂️ Serviço: ${serviceName}\n` +
+      `💈 Barbeiro: ${barberName}\n` +
+      `📅 Data: ${formattedDate}\n` +
+      `🕐 Horário: ${createdAppointment.appointment_time}\n\n` +
+      `Aguardo confirmação!`
+    );
+
+    const cleanNumber = whatsappNumber.replace(/\D/g, '');
+    return `https://wa.me/${cleanNumber}?text=${message}`;
+  };
+
+  if (isSuccess && createdAppointment) {
+    const barberName = barbers.find(b => b.id === createdAppointment.barber_id)?.name;
+    const serviceName = services.find(s => s.id === createdAppointment.service_id)?.name;
+
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="w-full max-w-md border-border/50 bg-card/80 backdrop-blur animate-scale-in">
+          <CardContent className="pt-8 text-center">
+            <div className="w-20 h-20 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Check className="w-10 h-10 text-primary" />
+            </div>
+            
+            <h2 className="text-2xl font-display font-bold text-foreground mb-2">
+              Agendamento Confirmado!
+            </h2>
+            <p className="text-muted-foreground mb-6">
+              Seu horário foi reservado com sucesso.
+            </p>
+
+            <div className="bg-secondary/50 rounded-lg p-4 mb-6 text-left space-y-2">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Serviço:</span>
+                <span className="text-foreground font-medium">{serviceName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Barbeiro:</span>
+                <span className="text-foreground font-medium">{barberName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Data:</span>
+                <span className="text-foreground font-medium">
+                  {format(new Date(createdAppointment.appointment_date), "dd 'de' MMMM", { locale: pt })}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Horário:</span>
+                <span className="text-foreground font-medium">{createdAppointment.appointment_time}</span>
+              </div>
+            </div>
+
+            <a 
+              href={getWhatsAppLink()} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="w-full"
+            >
+              <Button variant="gold" size="lg" className="w-full mb-4">
+                <MessageCircle className="w-5 h-5 mr-2" />
+                Enviar confirmação pelo WhatsApp
+              </Button>
+            </a>
+
+            <Button variant="outline" className="w-full" onClick={onBack}>
+              Voltar ao início
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const timeSlots = generateTimeSlots();
+
+  return (
+    <div className="min-h-screen bg-background py-8 px-4">
+      <div className="max-w-lg mx-auto">
+        <Button variant="ghost" onClick={onBack} className="mb-6">
+          ← Voltar
+        </Button>
+
+        {/* Progress indicator */}
+        <div className="flex items-center justify-center gap-2 mb-8">
+          {[1, 2, 3].map((s) => (
+            <div
+              key={s}
+              className={`h-2 rounded-full transition-all duration-300 ${
+                s === step ? 'w-8 bg-primary' : s < step ? 'w-8 bg-primary/50' : 'w-8 bg-muted'
+              }`}
+            />
+          ))}
+        </div>
+
+        {/* Step 1: Client Info */}
+        {step === 1 && (
+          <Card className="border-border/50 bg-card/80 backdrop-blur animate-fade-in">
+            <CardHeader>
+              <CardTitle className="text-xl font-display flex items-center gap-2">
+                <User className="w-5 h-5 text-primary" />
+                Seus dados
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Nome completo</Label>
+                <Input
+                  id="name"
+                  placeholder="Digite seu nome"
+                  value={formData.clientName}
+                  onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
+                  className="bg-input border-border"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="phone">Telefone</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="phone"
+                    placeholder="+258 84 000 0000"
+                    value={formData.clientPhone}
+                    onChange={(e) => setFormData({ ...formData, clientPhone: e.target.value })}
+                    className="bg-input border-border"
+                  />
+                </div>
+              </div>
+
+              <Button
+                variant="gold"
+                className="w-full mt-4"
+                onClick={() => setStep(2)}
+                disabled={!formData.clientName || !formData.clientPhone}
+              >
+                Continuar
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Step 2: Service & Barber */}
+        {step === 2 && (
+          <Card className="border-border/50 bg-card/80 backdrop-blur animate-fade-in">
+            <CardHeader>
+              <CardTitle className="text-xl font-display flex items-center gap-2">
+                <Scissors className="w-5 h-5 text-primary" />
+                Escolha o serviço
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Serviço</Label>
+                <Select
+                  value={formData.serviceId}
+                  onValueChange={(value) => setFormData({ ...formData, serviceId: value })}
+                >
+                  <SelectTrigger className="bg-input border-border">
+                    <SelectValue placeholder="Selecione um serviço" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {services.map((service) => (
+                      <SelectItem key={service.id} value={service.id}>
+                        <div className="flex justify-between items-center w-full">
+                          <span>{service.name}</span>
+                          <span className="text-muted-foreground ml-4">
+                            {service.price.toFixed(0)} MT • {service.duration}min
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Barbeiro</Label>
+                <Select
+                  value={formData.barberId}
+                  onValueChange={(value) => setFormData({ ...formData, barberId: value })}
+                >
+                  <SelectTrigger className="bg-input border-border">
+                    <SelectValue placeholder="Selecione um barbeiro" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {barbers.map((barber) => (
+                      <SelectItem key={barber.id} value={barber.id}>
+                        {barber.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex gap-2 mt-4">
+                <Button variant="outline" className="flex-1" onClick={() => setStep(1)}>
+                  Voltar
+                </Button>
+                <Button
+                  variant="gold"
+                  className="flex-1"
+                  onClick={() => setStep(3)}
+                  disabled={!formData.serviceId || !formData.barberId}
+                >
+                  Continuar
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Step 3: Date & Time */}
+        {step === 3 && (
+          <Card className="border-border/50 bg-card/80 backdrop-blur animate-fade-in">
+            <CardHeader>
+              <CardTitle className="text-xl font-display flex items-center gap-2">
+                <CalendarIcon className="w-5 h-5 text-primary" />
+                Escolha a data e hora
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex justify-center">
+                <Calendar
+                  mode="single"
+                  selected={formData.appointmentDate}
+                  onSelect={(date) => setFormData({ ...formData, appointmentDate: date, appointmentTime: '' })}
+                  disabled={(date) => isBefore(date, startOfDay(new Date())) || date > addDays(new Date(), 30)}
+                  locale={pt}
+                  className="rounded-lg border border-border"
+                />
+              </div>
+
+              {formData.appointmentDate && (
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <Clock className="w-4 h-4" />
+                    Horários disponíveis
+                  </Label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {timeSlots.length > 0 ? (
+                      timeSlots.map((time) => (
+                        <Button
+                          key={time}
+                          variant={formData.appointmentTime === time ? 'gold' : 'outline'}
+                          size="sm"
+                          onClick={() => setFormData({ ...formData, appointmentTime: time })}
+                          className="text-sm"
+                        >
+                          {time}
+                        </Button>
+                      ))
+                    ) : (
+                      <p className="col-span-4 text-center text-muted-foreground py-4">
+                        Nenhum horário disponível para esta data.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-2 mt-4">
+                <Button variant="outline" className="flex-1" onClick={() => setStep(2)}>
+                  Voltar
+                </Button>
+                <Button
+                  variant="gold"
+                  className="flex-1"
+                  onClick={handleSubmit}
+                  disabled={!formData.appointmentDate || !formData.appointmentTime || isLoading}
+                >
+                  {isLoading ? 'Agendando...' : 'Confirmar'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}

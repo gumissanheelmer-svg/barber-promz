@@ -1,0 +1,234 @@
+import { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { supabase } from '@/integrations/supabase/client';
+import { format } from 'date-fns';
+import { pt } from 'date-fns/locale';
+import { Calendar, Search, MessageCircle, Check, X, Filter } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+
+interface AppointmentWithDetails {
+  id: string;
+  client_name: string;
+  client_phone: string;
+  appointment_date: string;
+  appointment_time: string;
+  status: string;
+  notes: string | null;
+  barber: { name: string } | null;
+  service: { name: string; price: number } | null;
+}
+
+export default function AppointmentsList() {
+  const { toast } = useToast();
+  const [appointments, setAppointments] = useState<AppointmentWithDetails[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [whatsappNumber, setWhatsappNumber] = useState('+258840000000');
+
+  useEffect(() => {
+    fetchAppointments();
+    fetchSettings();
+  }, []);
+
+  const fetchSettings = async () => {
+    const { data } = await supabase.from('settings').select('whatsapp_number').limit(1).maybeSingle();
+    if (data) setWhatsappNumber(data.whatsapp_number || '+258840000000');
+  };
+
+  const fetchAppointments = async () => {
+    setIsLoading(true);
+    const { data, error } = await supabase
+      .from('appointments')
+      .select('*, barber:barbers(name), service:services(name, price)')
+      .order('appointment_date', { ascending: false })
+      .order('appointment_time', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching appointments:', error);
+    } else {
+      setAppointments(data || []);
+    }
+    setIsLoading(false);
+  };
+
+  const updateStatus = async (id: string, status: string) => {
+    const { error } = await supabase
+      .from('appointments')
+      .update({ status })
+      .eq('id', id);
+
+    if (error) {
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível atualizar o status.',
+        variant: 'destructive',
+      });
+    } else {
+      toast({
+        title: 'Sucesso',
+        description: 'Status atualizado com sucesso.',
+      });
+      fetchAppointments();
+    }
+  };
+
+  const getWhatsAppLink = (apt: AppointmentWithDetails) => {
+    const message = encodeURIComponent(
+      `Olá ${apt.client_name}!\n\n` +
+      `Confirmamos seu agendamento:\n` +
+      `✂️ Serviço: ${apt.service?.name}\n` +
+      `💈 Barbeiro: ${apt.barber?.name}\n` +
+      `📅 Data: ${format(new Date(apt.appointment_date), "dd 'de' MMMM", { locale: pt })}\n` +
+      `🕐 Horário: ${apt.appointment_time}\n\n` +
+      `Aguardamos você!`
+    );
+    const cleanNumber = apt.client_phone.replace(/\D/g, '');
+    return `https://wa.me/${cleanNumber}?text=${message}`;
+  };
+
+  const filteredAppointments = appointments.filter((apt) => {
+    const matchesSearch = apt.client_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         apt.client_phone.includes(searchTerm);
+    const matchesStatus = statusFilter === 'all' || apt.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  const getStatusBadge = (status: string) => {
+    const styles: Record<string, string> = {
+      pending: 'bg-yellow-500/20 text-yellow-500',
+      confirmed: 'bg-green-500/20 text-green-500',
+      cancelled: 'bg-red-500/20 text-red-500',
+      completed: 'bg-blue-500/20 text-blue-500',
+    };
+    const labels: Record<string, string> = {
+      pending: 'Pendente',
+      confirmed: 'Confirmado',
+      cancelled: 'Cancelado',
+      completed: 'Concluído',
+    };
+    return <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[status]}`}>{labels[status]}</span>;
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-display font-bold text-foreground">Agendamentos</h1>
+      </div>
+
+      {/* Filters */}
+      <Card className="border-border/50 bg-card/80">
+        <CardContent className="p-4">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por nome ou telefone..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 bg-input border-border"
+              />
+            </div>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-full md:w-48 bg-input border-border">
+                <Filter className="w-4 h-4 mr-2" />
+                <SelectValue placeholder="Filtrar por status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="pending">Pendentes</SelectItem>
+                <SelectItem value="confirmed">Confirmados</SelectItem>
+                <SelectItem value="completed">Concluídos</SelectItem>
+                <SelectItem value="cancelled">Cancelados</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Appointments List */}
+      <Card className="border-border/50 bg-card/80">
+        <CardHeader>
+          <CardTitle className="font-display flex items-center gap-2">
+            <Calendar className="w-5 h-5 text-primary" />
+            Lista de Agendamentos ({filteredAppointments.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-20 bg-muted animate-pulse rounded-lg" />
+              ))}
+            </div>
+          ) : filteredAppointments.length === 0 ? (
+            <p className="text-muted-foreground text-center py-8">Nenhum agendamento encontrado.</p>
+          ) : (
+            <div className="space-y-4">
+              {filteredAppointments.map((apt) => (
+                <div key={apt.id} className="flex flex-col md:flex-row md:items-center justify-between p-4 bg-secondary/30 rounded-lg gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="font-medium text-foreground">{apt.client_name}</p>
+                      {getStatusBadge(apt.status)}
+                    </div>
+                    <p className="text-sm text-muted-foreground">{apt.client_phone}</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {apt.service?.name} com {apt.barber?.name} • {apt.service?.price?.toFixed(0)} MT
+                    </p>
+                  </div>
+                  <div className="text-left md:text-right">
+                    <p className="text-foreground font-medium">
+                      {format(new Date(apt.appointment_date), "dd 'de' MMMM", { locale: pt })}
+                    </p>
+                    <p className="text-sm text-muted-foreground">{apt.appointment_time}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {apt.status === 'pending' && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => updateStatus(apt.id, 'confirmed')}
+                          className="text-green-500 border-green-500/50 hover:bg-green-500/10"
+                        >
+                          <Check className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => updateStatus(apt.id, 'cancelled')}
+                          className="text-red-500 border-red-500/50 hover:bg-red-500/10"
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </>
+                    )}
+                    {apt.status === 'confirmed' && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => updateStatus(apt.id, 'completed')}
+                        className="text-blue-500 border-blue-500/50 hover:bg-blue-500/10"
+                      >
+                        Concluir
+                      </Button>
+                    )}
+                    <a href={getWhatsAppLink(apt)} target="_blank" rel="noopener noreferrer">
+                      <Button size="sm" variant="gold">
+                        <MessageCircle className="w-4 h-4" />
+                      </Button>
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
