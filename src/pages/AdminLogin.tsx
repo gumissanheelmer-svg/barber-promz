@@ -12,13 +12,14 @@ import { Helmet } from 'react-helmet-async';
 
 export default function AdminLogin() {
   const navigate = useNavigate();
-  const { signIn, user, isAdmin, isLoading } = useAuth();
+  const { signIn, signUp, user, isAdmin, isLoading } = useAuth();
   const { toast } = useToast();
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
 
   useEffect(() => {
     if (!isLoading && user && isAdmin) {
@@ -41,25 +42,43 @@ export default function AdminLogin() {
     setIsSubmitting(true);
 
     try {
-      const { error } = await signIn(email.trim(), password);
+      if (isSignUp) {
+        const { error } = await signUp(email.trim(), password);
 
-      if (error) {
+        if (error) {
+          toast({
+            title: 'Erro ao criar conta',
+            description: error.message || 'Não foi possível criar a conta.',
+            variant: 'destructive',
+          });
+          return;
+        }
+
         toast({
-          title: 'Erro ao entrar',
-          description: 'Email ou senha incorretos.',
-          variant: 'destructive',
+          title: 'Conta criada!',
+          description: 'Login realizado automaticamente.',
         });
-        return;
-      }
+      } else {
+        const { error } = await signIn(email.trim(), password);
 
-      toast({
-        title: 'Bem-vindo!',
-        description: 'Login realizado com sucesso.',
-      });
+        if (error) {
+          toast({
+            title: 'Erro ao entrar',
+            description: 'Email ou senha incorretos.',
+            variant: 'destructive',
+          });
+          return;
+        }
+
+        toast({
+          title: 'Bem-vindo!',
+          description: 'Login realizado com sucesso.',
+        });
+      }
     } catch (err) {
       toast({
         title: 'Erro',
-        description: 'Ocorreu um erro ao tentar entrar.',
+        description: 'Ocorreu um erro. Tente novamente.',
         variant: 'destructive',
       });
     } finally {
@@ -98,8 +117,14 @@ export default function AdminLogin() {
 
           <Card className="border-border/50 bg-card/80 backdrop-blur">
             <CardHeader className="text-center">
-              <CardTitle className="text-2xl font-display">Área Administrativa</CardTitle>
-              <CardDescription>Entre com suas credenciais para acessar o painel</CardDescription>
+              <CardTitle className="text-2xl font-display">
+                {isSignUp ? 'Criar Conta Admin' : 'Área Administrativa'}
+              </CardTitle>
+              <CardDescription>
+                {isSignUp 
+                  ? 'Crie sua conta de administrador' 
+                  : 'Entre com suas credenciais para acessar o painel'}
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -148,7 +173,19 @@ export default function AdminLogin() {
                   className="w-full mt-6"
                   disabled={isSubmitting}
                 >
-                  {isSubmitting ? 'Entrando...' : 'Entrar'}
+                  {isSubmitting 
+                    ? (isSignUp ? 'Criando...' : 'Entrando...') 
+                    : (isSignUp ? 'Criar Conta' : 'Entrar')}
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full"
+                  onClick={() => setIsSignUp(!isSignUp)}
+                  disabled={isSubmitting}
+                >
+                  {isSignUp ? 'Já tenho conta' : 'Criar conta'}
                 </Button>
               </form>
 

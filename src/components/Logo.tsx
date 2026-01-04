@@ -1,3 +1,4 @@
+import { forwardRef } from 'react';
 import { Scissors } from 'lucide-react';
 
 interface LogoProps {
@@ -5,7 +6,10 @@ interface LogoProps {
   showText?: boolean;
 }
 
-export function Logo({ size = 'md', showText = true }: LogoProps) {
+export const Logo = forwardRef<HTMLDivElement, LogoProps>(function Logo(
+  { size = 'md', showText = true },
+  ref
+) {
   const sizeClasses = {
     sm: 'h-8 w-8',
     md: 'h-12 w-12',
@@ -19,7 +23,7 @@ export function Logo({ size = 'md', showText = true }: LogoProps) {
   };
 
   return (
-    <div className="flex items-center gap-3">
+    <div ref={ref} className="flex items-center gap-3">
       <div className={`${sizeClasses[size]} relative flex items-center justify-center`}>
         <div className="absolute inset-0 bg-gradient-gold rounded-full opacity-20 blur-lg" />
         <div className="relative bg-gradient-gold rounded-full p-2 shadow-gold">
@@ -38,4 +42,4 @@ export function Logo({ size = 'md', showText = true }: LogoProps) {
       )}
     </div>
   );
-}
+});
