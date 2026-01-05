@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
+import { Button } from '@/components/ui/button';
 import { Calendar, Users, Scissors, Clock } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { pt } from 'date-fns/locale';
@@ -147,10 +148,13 @@ export default function DashboardOverview() {
         <h1 className="text-3xl font-display font-bold text-foreground">Dashboard</h1>
         <Card className="border-border/50 bg-card/80">
           <CardContent className="p-8 text-center">
-            <p className="text-muted-foreground">Nenhuma barbearia associada à sua conta.</p>
-            <p className="text-sm text-muted-foreground mt-2">
-              Contacte o suporte para configurar a sua barbearia.
-            </p>
+            <p className="text-muted-foreground">Bem-vindo! Configure sua barbearia para começar.</p>
+            <Button 
+              className="mt-4" 
+              onClick={() => window.location.href = '/register'}
+            >
+              Criar Barbearia
+            </Button>
           </CardContent>
         </Card>
       </div>
