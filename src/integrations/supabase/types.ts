@@ -408,6 +408,10 @@ export type Database = {
         Args: { _barbershop_id: string; _user_id: string }
         Returns: boolean
       }
+      is_barbershop_staff: {
+        Args: { _barbershop_id: string; _user_id: string }
+        Returns: boolean
+      }
       is_superadmin: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
