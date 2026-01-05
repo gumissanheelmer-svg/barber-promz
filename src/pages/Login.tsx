@@ -22,33 +22,35 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loginState, setLoginState] = useState<LoginState>('form');
-  const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
+  const [isCheckingRoles, setIsCheckingRoles] = useState(false);
 
   useEffect(() => {
-    if (!isLoading && user) {
+    // Don't do anything while loading or checking roles
+    if (isLoading || isCheckingRoles) return;
+    
+    if (user) {
       // Admin takes priority
       if (isAdmin) {
         navigate('/admin/dashboard');
         return;
       }
       
-      // Check barber status
+      // Approved barber
       if (isApprovedBarber) {
         navigate('/barber/dashboard');
         return;
       }
       
+      // Pending barber
       if (isBarber) {
         setLoginState('pending');
         return;
       }
       
       // User exists but is neither admin nor barber
-      if (hasCheckedAuth) {
-        setLoginState('unauthorized');
-      }
+      setLoginState('unauthorized');
     }
-  }, [user, isAdmin, isBarber, isApprovedBarber, isLoading, navigate, hasCheckedAuth]);
+  }, [user, isAdmin, isBarber, isApprovedBarber, isLoading, isCheckingRoles, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,12 +65,13 @@ export default function Login() {
     }
 
     setIsSubmitting(true);
-    setHasCheckedAuth(false);
+    setIsCheckingRoles(true);
 
     try {
       const { error } = await signIn(email.trim(), password);
 
       if (error) {
+        setIsCheckingRoles(false);
         toast({
           title: 'Erro ao entrar',
           description: 'Email ou senha incorretos.',
@@ -77,14 +80,17 @@ export default function Login() {
         return;
       }
 
-      // Mark that we've completed auth check after successful login
-      setHasCheckedAuth(true);
-      
       toast({
         title: 'Bem-vindo!',
-        description: 'Login realizado com sucesso.',
+        description: 'Verificando permissões...',
       });
+      
+      // Wait for roles to be verified
+      setTimeout(() => {
+        setIsCheckingRoles(false);
+      }, 1500);
     } catch (err) {
+      setIsCheckingRoles(false);
       toast({
         title: 'Erro',
         description: 'Ocorreu um erro. Tente novamente.',
@@ -95,11 +101,14 @@ export default function Login() {
     }
   };
 
-  if (isLoading) {
+  if (isLoading || isCheckingRoles) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-pulse">
+        <div className="animate-pulse text-center">
           <Logo size="lg" />
+          <p className="text-muted-foreground mt-4">
+            {isCheckingRoles ? 'Verificando permissões...' : 'Carregando...'}
+          </p>
         </div>
       </div>
     );
