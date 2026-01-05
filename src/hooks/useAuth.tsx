@@ -10,14 +10,22 @@ interface BarberAccountInfo {
   barbershop_id: string | null;
 }
 
+interface BarbershopInfo {
+  id: string;
+  name: string;
+  approval_status: 'pending' | 'approved' | 'rejected' | 'blocked';
+}
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
+  isSuperAdmin: boolean;
   isAdmin: boolean;
   isBarber: boolean;
   isApprovedBarber: boolean;
   barberAccount: BarberAccountInfo | null;
   barbershopId: string | null;
+  barbershopInfo: BarbershopInfo | null;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string) => Promise<{ error: Error | null }>;
@@ -30,11 +38,13 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isBarber, setIsBarber] = useState(false);
   const [isApprovedBarber, setIsApprovedBarber] = useState(false);
   const [barberAccount, setBarberAccount] = useState<BarberAccountInfo | null>(null);
   const [barbershopId, setBarbershopId] = useState<string | null>(null);
+  const [barbershopInfo, setBarbershopInfo] = useState<BarbershopInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -67,29 +77,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const resetRoles = () => {
+    setIsSuperAdmin(false);
     setIsAdmin(false);
     setIsBarber(false);
     setIsApprovedBarber(false);
     setBarberAccount(null);
     setBarbershopId(null);
+    setBarbershopInfo(null);
   };
 
   const checkUserRoles = async (userId: string) => {
     try {
-      // Check admin role and get barbershop_id
-      const { data: adminData, error: adminError } = await supabase
+      // Check all roles for this user
+      const { data: rolesData, error: rolesError } = await supabase
         .from('user_roles')
         .select('role, barbershop_id')
-        .eq('user_id', userId)
-        .eq('role', 'admin')
-        .maybeSingle();
+        .eq('user_id', userId);
 
-      if (adminError) {
-        console.error('Error checking admin role:', adminError);
+      if (rolesError) {
+        console.error('Error checking roles:', rolesError);
       }
-      setIsAdmin(!!adminData);
-      if (adminData?.barbershop_id) {
-        setBarbershopId(adminData.barbershop_id);
+
+      // Check for superadmin role
+      const superAdminRole = rolesData?.find(r => r.role === 'superadmin');
+      setIsSuperAdmin(!!superAdminRole);
+
+      // Check for admin role and get barbershop_id
+      const adminRole = rolesData?.find(r => r.role === 'admin');
+      setIsAdmin(!!adminRole);
+      
+      if (adminRole?.barbershop_id) {
+        setBarbershopId(adminRole.barbershop_id);
+        
+        // Fetch barbershop info to check approval status
+        const { data: shopData, error: shopError } = await supabase
+          .from('barbershops')
+          .select('id, name, approval_status')
+          .eq('id', adminRole.barbershop_id)
+          .maybeSingle();
+
+        if (!shopError && shopData) {
+          setBarbershopInfo(shopData as BarbershopInfo);
+        }
       }
 
       // Check barber account and status
@@ -111,7 +140,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsBarber(true);
         setBarberAccount(barberData as BarberAccountInfo);
         setIsApprovedBarber(barberData.approval_status === 'approved');
-        if (barberData.barbershop_id) {
+        if (barberData.barbershop_id && !barbershopId) {
           setBarbershopId(barberData.barbershop_id);
         }
       } else {
@@ -178,12 +207,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return (
     <AuthContext.Provider value={{ 
       user, 
-      session, 
+      session,
+      isSuperAdmin,
       isAdmin, 
       isBarber, 
       isApprovedBarber, 
       barberAccount,
       barbershopId,
+      barbershopInfo,
       isLoading, 
       signIn, 
       signUp, 

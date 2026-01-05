@@ -209,7 +209,7 @@ export default function BarbershopRegister() {
         }
       }
 
-      // 4. Create barbershop
+      // 4. Create barbershop with pending status
       const { data: barbershopData, error: shopError } = await supabase
         .from('barbershops')
         .insert({
@@ -221,7 +221,9 @@ export default function BarbershopRegister() {
           secondary_color: formData.secondaryColor,
           background_color: formData.backgroundColor,
           text_color: formData.textColor,
-          active: true,
+          active: false, // Not active until approved
+          approval_status: 'pending', // Requires super admin approval
+          owner_email: formData.ownerEmail,
         })
         .select()
         .single();
@@ -250,17 +252,18 @@ export default function BarbershopRegister() {
       }
 
       toast({
-        title: "Barbearia criada com sucesso!",
-        description: "Você será redirecionado para o painel administrativo.",
+        title: "Barbearia registrada!",
+        description: "Aguarde a aprovação do administrador para acessar o sistema.",
       });
 
-      // Refresh roles to ensure isAdmin is true before redirecting
+      // Refresh roles to ensure state is updated
       await refreshRoles();
       
       // Give a small delay for state to propagate
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      navigate('/admin/dashboard');
+      // Redirect to pending approval page
+      navigate('/pending-approval');
 
     } catch (error: any) {
       console.error('Registration error:', error);

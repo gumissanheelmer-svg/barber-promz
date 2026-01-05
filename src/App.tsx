@@ -11,6 +11,8 @@ import BarbershopList from "./pages/BarbershopList";
 import BarbershopHome from "./pages/BarbershopHome";
 import Login from "./pages/Login";
 import AdminDashboard from "./pages/AdminDashboard";
+import SuperAdminDashboard from "./pages/SuperAdminDashboard";
+import PendingApproval from "./pages/PendingApproval";
 import DashboardOverview from "./pages/admin/DashboardOverview";
 import AppointmentsList from "./pages/admin/AppointmentsList";
 import BarbersList from "./pages/admin/BarbersList";
@@ -47,6 +49,10 @@ const App = () => (
                   <Route path="/barber/login" element={<Login />} />
                   <Route path="/barber/register" element={<BarberRegister />} />
                   <Route path="/register" element={<BarbershopRegister />} />
+                  <Route path="/pending-approval" element={<PendingApproval />} />
+                  
+                  {/* Super Admin routes */}
+                  <Route path="/superadmin/dashboard" element={<SuperAdminDashboard />} />
                   
                   {/* Admin routes */}
                   <Route path="/admin/dashboard" element={<AdminDashboard />}>
