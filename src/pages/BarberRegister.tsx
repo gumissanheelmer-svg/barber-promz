@@ -7,13 +7,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Eye, EyeOff, Lock, Mail, User, Phone, Clock, CheckCircle } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail, User, Phone, Clock, CheckCircle, Store } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import { z } from 'zod';
 
 const registerSchema = z.object({
   name: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres').max(100),
   phone: z.string().min(9, 'Telefone inválido').max(20),
+  barbershopName: z.string().min(2, 'Nome da barbearia deve ter pelo menos 2 caracteres').max(100),
   email: z.string().email('Email inválido').max(255),
   password: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres'),
 });
@@ -25,6 +26,7 @@ export default function BarberRegister() {
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
+    barbershopName: '',
     email: '',
     password: '',
   });
@@ -96,6 +98,7 @@ export default function BarberRegister() {
           name: formData.name.trim(),
           email: formData.email.trim(),
           phone: formData.phone.trim(),
+          barbershop_name: formData.barbershopName.trim(),
           approval_status: 'pending',
         });
 
@@ -232,6 +235,22 @@ export default function BarberRegister() {
                       placeholder="+258 84 xxx xxxx"
                       value={formData.phone}
                       onChange={(e) => handleInputChange('phone', e.target.value)}
+                      className="pl-10 bg-input border-border"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="barbershopName">Nome da Barbearia</Label>
+                  <div className="relative">
+                    <Store className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="barbershopName"
+                      type="text"
+                      placeholder="Nome da barbearia onde trabalha"
+                      value={formData.barbershopName}
+                      onChange={(e) => handleInputChange('barbershopName', e.target.value)}
                       className="pl-10 bg-input border-border"
                       required
                     />

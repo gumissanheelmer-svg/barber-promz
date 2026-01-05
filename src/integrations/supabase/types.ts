@@ -86,6 +86,7 @@ export type Database = {
           approval_status: string
           barber_id: string | null
           barbershop_id: string | null
+          barbershop_name: string | null
           created_at: string
           email: string
           id: string
@@ -98,6 +99,7 @@ export type Database = {
           approval_status?: string
           barber_id?: string | null
           barbershop_id?: string | null
+          barbershop_name?: string | null
           created_at?: string
           email: string
           id?: string
@@ -110,6 +112,7 @@ export type Database = {
           approval_status?: string
           barber_id?: string | null
           barbershop_id?: string | null
+          barbershop_name?: string | null
           created_at?: string
           email?: string
           id?: string

@@ -15,7 +15,8 @@ import {
   Phone,
   Mail,
   MoreVertical,
-  RefreshCw
+  RefreshCw,
+  Store
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -41,6 +42,7 @@ interface BarberAccount {
   name: string;
   email: string;
   phone: string;
+  barbershop_name: string | null;
   approval_status: 'pending' | 'approved' | 'rejected' | 'blocked';
   barber_id: string | null;
   barbershop_id: string | null;
@@ -292,6 +294,12 @@ export default function BarberAccountsPage() {
                         <Phone className="w-3 h-3" />
                         {account.phone}
                       </span>
+                      {account.barbershop_name && (
+                        <span className="flex items-center gap-1 text-primary font-medium">
+                          <Store className="w-3 h-3" />
+                          {account.barbershop_name}
+                        </span>
+                      )}
                       <span>
                         {format(new Date(account.created_at), "d 'de' MMM, yyyy", { locale: pt })}
                       </span>
