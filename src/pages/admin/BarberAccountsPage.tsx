@@ -67,11 +67,19 @@ export default function BarberAccountsPage() {
     if (!barbershopId) return;
     
     setIsLoading(true);
-    // Get accounts for this barbershop OR accounts without a barbershop (pending assignment)
+    
+    // First, get the barbershop name
+    const { data: barbershopData } = await supabase
+      .from('barbershops')
+      .select('name')
+      .eq('id', barbershopId)
+      .single();
+    
+    // Get accounts for this barbershop by ID, OR by matching barbershop name (case-insensitive)
     const { data, error } = await supabase
       .from('barber_accounts')
       .select('*')
-      .or(`barbershop_id.eq.${barbershopId},barbershop_id.is.null`)
+      .or(`barbershop_id.eq.${barbershopId}${barbershopData?.name ? `,barbershop_name.ilike.${barbershopData.name}` : ''}`)
       .order('created_at', { ascending: false });
 
     if (error) {
