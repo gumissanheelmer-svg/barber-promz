@@ -409,6 +409,39 @@ export type Database = {
         }
         Returns: string
       }
+      get_public_barbers: {
+        Args: { p_barbershop_id: string }
+        Returns: {
+          id: string
+          name: string
+          working_hours: Json
+        }[]
+      }
+      get_public_barbershop: {
+        Args: { p_slug: string }
+        Returns: {
+          background_color: string
+          closing_time: string
+          id: string
+          logo_url: string
+          name: string
+          opening_time: string
+          primary_color: string
+          secondary_color: string
+          slug: string
+          text_color: string
+          whatsapp_number: string
+        }[]
+      }
+      get_public_services: {
+        Args: { p_barbershop_id: string }
+        Returns: {
+          duration: number
+          id: string
+          name: string
+          price: number
+        }[]
+      }
       get_user_barbershop_id: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {

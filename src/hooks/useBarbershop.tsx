@@ -36,12 +36,9 @@ export function BarbershopProvider({ children }: { children: ReactNode }) {
     setError(null);
 
     try {
+      // Use secure RPC function that excludes owner_email
       const { data, error: fetchError } = await supabase
-        .from('barbershops')
-        .select('*')
-        .eq('slug', slug)
-        .eq('active', true)
-        .maybeSingle();
+        .rpc('get_public_barbershop', { p_slug: slug });
 
       if (fetchError) {
         setError('Erro ao carregar barbearia');
@@ -49,13 +46,18 @@ export function BarbershopProvider({ children }: { children: ReactNode }) {
         return false;
       }
 
-      if (!data) {
+      if (!data || data.length === 0) {
         setError('Barbearia não encontrada');
         setIsLoading(false);
         return false;
       }
 
-      setBarbershop(data as Barbershop);
+      // RPC returns an array, get first item
+      const barbershopData = data[0];
+      setBarbershop({
+        ...barbershopData,
+        active: true, // We only get active barbershops
+      } as Barbershop);
       setIsLoading(false);
       return true;
     } catch (err) {

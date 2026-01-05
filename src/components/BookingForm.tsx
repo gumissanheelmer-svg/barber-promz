@@ -97,21 +97,21 @@ export function BookingForm({ onBack, barbershopId }: BookingFormProps) {
   const fetchData = async () => {
     if (!currentBarbershopId) return;
 
+    // Use secure RPC functions to fetch only non-sensitive data
     const [servicesRes, barbersRes] = await Promise.all([
-      supabase.from('services').select('id, name, price, duration').eq('active', true).eq('barbershop_id', currentBarbershopId),
-      // Only select non-sensitive fields - no phone for public view
-      supabase.from('barbers').select('id, name, working_hours').eq('active', true).eq('barbershop_id', currentBarbershopId),
+      supabase.rpc('get_public_services', { p_barbershop_id: currentBarbershopId }),
+      supabase.rpc('get_public_barbers', { p_barbershop_id: currentBarbershopId }),
     ]);
 
     if (servicesRes.data) setServices(servicesRes.data as Service[]);
     if (barbersRes.data) {
-      // Map to Barber type, excluding sensitive data (phone not included in query)
-      const mappedBarbers: Barber[] = barbersRes.data.map(b => ({
+      // Map to Barber type - phone is intentionally excluded for security
+      const mappedBarbers: Barber[] = barbersRes.data.map((b: { id: string; name: string; working_hours: unknown }) => ({
         id: b.id,
         name: b.name,
-        phone: null, // Not fetched for public view - hidden for security
-        active: true, // We only query active barbers
-        working_hours: b.working_hours as unknown as WorkingHours,
+        phone: null, // Not fetched - hidden for security
+        active: true,
+        working_hours: b.working_hours as WorkingHours,
         created_at: '',
         updated_at: '',
       }));
