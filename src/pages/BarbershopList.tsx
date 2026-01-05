@@ -1,163 +1,148 @@
-import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
-import { Logo } from '@/components/Logo';
-import { Card, CardContent } from '@/components/ui/card';
-import { Scissors, MapPin } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
-
-interface BarbershopPreview {
-  id: string;
-  slug: string;
-  name: string;
-  logo_url: string | null;
-  primary_color: string;
-}
+import { Logo } from '@/components/Logo';
+import { Button } from '@/components/ui/button';
+import { Scissors, Calendar, Users, MessageSquare, ArrowRight } from 'lucide-react';
 
 export default function BarbershopList() {
-  const [barbershops, setBarbershops] = useState<BarbershopPreview[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    loadBarbershops();
-  }, []);
-
-  const loadBarbershops = async () => {
-    const { data, error } = await supabase
-      .from('barbershops')
-      .select('id, slug, name, logo_url, primary_color')
-      .eq('active', true)
-      .order('name');
-
-    if (!error && data) {
-      setBarbershops(data);
-    }
-    setIsLoading(false);
-  };
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-pulse">
-          <Logo size="lg" />
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <>
+    <div className="min-h-screen bg-background overflow-hidden">
       <Helmet>
-        <title>Barbearias - Agendamento Online | Moçambique</title>
-        <meta 
-          name="description" 
-          content="Encontre a melhor barbearia e agende seu corte online. Profissionais experientes em Moçambique." 
-        />
+        <title>Sistema de Agendamento para Barbearias</title>
+        <meta name="description" content="Sistema completo de agendamento online para barbearias. Gerencie seus clientes, barbeiros e horários de forma simples e eficiente." />
       </Helmet>
 
-      <div className="min-h-screen bg-background">
-        {/* Background decorations */}
-        <div className="fixed inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-primary/5 rounded-full blur-3xl" />
-          <div className="absolute bottom-[-20%] left-[-10%] w-[500px] h-[500px] bg-primary/5 rounded-full blur-3xl" />
-        </div>
-
-        {/* Header */}
-        <header className="relative z-10 flex items-center justify-between px-6 py-4 max-w-7xl mx-auto">
-          <Logo size="sm" />
-          <div className="flex items-center gap-4">
-            <Link 
-              to="/register"
-              className="text-sm font-medium text-primary hover:text-primary/80 transition-colors"
-            >
-              Criar Barbearia
-            </Link>
-            <Link 
-              to="/login"
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Entrar
-            </Link>
-          </div>
-        </header>
-
-        {/* Main content */}
-        <main className="relative z-10 px-6 py-12 max-w-5xl mx-auto">
-          <div className="text-center mb-12">
-            <h1 className="text-4xl md:text-5xl font-display font-bold text-foreground">
-              Escolha a sua <span className="text-primary">Barbearia</span>
-            </h1>
-            <p className="mt-4 text-lg text-muted-foreground">
-              Selecione uma barbearia para agendar o seu horário
-            </p>
-          </div>
-
-          {barbershops.length === 0 ? (
-            <div className="text-center py-16">
-              <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center mx-auto mb-6">
-                <MapPin className="w-10 h-10 text-muted-foreground" />
-              </div>
-              <h2 className="text-xl font-semibold text-foreground mb-2">
-                Nenhuma barbearia disponível
-              </h2>
-              <p className="text-muted-foreground mb-6">
-                Seja o primeiro a registrar sua barbearia!
-              </p>
-              <Link 
-                to="/register"
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
-              >
-                <Scissors className="w-5 h-5" />
-                Criar Minha Barbearia
-              </Link>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {barbershops.map((shop) => (
-                <Link key={shop.id} to={`/b/${shop.slug}`}>
-                  <Card className="group cursor-pointer border-border/50 bg-card/80 backdrop-blur hover:border-primary/50 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10">
-                    <CardContent className="p-6">
-                      <div className="flex items-center gap-4">
-                        {shop.logo_url ? (
-                          <img 
-                            src={shop.logo_url} 
-                            alt={shop.name}
-                            className="w-16 h-16 rounded-full object-cover border-2"
-                            style={{ borderColor: shop.primary_color }}
-                          />
-                        ) : (
-                          <div 
-                            className="w-16 h-16 rounded-full flex items-center justify-center"
-                            style={{ backgroundColor: `${shop.primary_color}20` }}
-                          >
-                            <Scissors 
-                              className="w-8 h-8" 
-                              style={{ color: shop.primary_color }}
-                            />
-                          </div>
-                        )}
-                        <div>
-                          <h3 className="text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
-                            {shop.name}
-                          </h3>
-                          <p className="text-sm text-muted-foreground">
-                            Agendar horário →
-                          </p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))}
-            </div>
-          )}
-        </main>
-
-        {/* Footer */}
-        <footer className="relative z-10 py-8 text-center text-sm text-muted-foreground">
-          <p>© {new Date().getFullYear()} Sistema de Agendamento. Todos os direitos reservados.</p>
-        </footer>
+      {/* Background decorations */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-primary/5 rounded-full blur-3xl" />
+        <div className="absolute bottom-[-20%] left-[-10%] w-[500px] h-[500px] bg-primary/5 rounded-full blur-3xl" />
       </div>
-    </>
+
+      {/* Header */}
+      <header className="relative z-10 flex items-center justify-between px-6 py-4 max-w-7xl mx-auto">
+        <Logo size="sm" />
+        <div className="flex items-center gap-3">
+          <Link to="/register">
+            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+              Criar Barbearia
+            </Button>
+          </Link>
+          <Link to="/login">
+            <Button variant="default" size="sm">
+              Entrar
+            </Button>
+          </Link>
+        </div>
+      </header>
+
+      {/* Hero Section */}
+      <main className="relative z-10">
+        <section className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)] px-6 text-center">
+          <div className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
+            <Logo size="lg" showText={false} />
+          </div>
+
+          <h1 
+            className="mt-8 text-4xl md:text-6xl font-display font-bold text-foreground animate-slide-up max-w-3xl"
+            style={{ animationDelay: '0.2s' }}
+          >
+            Sistema de Agendamento para{' '}
+            <span className="text-primary">Barbearias</span>
+          </h1>
+
+          <p 
+            className="mt-4 text-lg md:text-xl text-muted-foreground max-w-xl animate-slide-up"
+            style={{ animationDelay: '0.3s' }}
+          >
+            Gerencie sua barbearia de forma simples. Seus clientes agendam online, você foca no que importa.
+          </p>
+
+          <div 
+            className="mt-10 flex flex-col sm:flex-row gap-4 animate-slide-up"
+            style={{ animationDelay: '0.4s' }}
+          >
+            <Link to="/register">
+              <Button variant="hero" size="xl">
+                <Scissors className="w-5 h-5 mr-2" />
+                Criar Minha Barbearia
+              </Button>
+            </Link>
+          </div>
+
+          <p 
+            className="mt-6 text-sm text-muted-foreground animate-slide-up"
+            style={{ animationDelay: '0.5s' }}
+          >
+            É cliente? Peça o link de agendamento ao seu barbeiro.
+          </p>
+        </section>
+
+        {/* Features */}
+        <section className="py-20 px-6">
+          <div className="max-w-5xl mx-auto">
+            <h2 className="text-2xl md:text-3xl font-display font-bold text-center text-foreground mb-12">
+              Tudo que você precisa para gerir sua barbearia
+            </h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="flex flex-col items-center p-6 rounded-xl bg-card/50 border border-border/50 backdrop-blur text-center">
+                <div className="w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+                  <Calendar className="w-7 h-7 text-primary" />
+                </div>
+                <h3 className="font-semibold text-foreground mb-2">Agendamento 24h</h3>
+                <p className="text-sm text-muted-foreground">Clientes agendam a qualquer hora, mesmo quando você não está</p>
+              </div>
+
+              <div className="flex flex-col items-center p-6 rounded-xl bg-card/50 border border-border/50 backdrop-blur text-center">
+                <div className="w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+                  <Users className="w-7 h-7 text-primary" />
+                </div>
+                <h3 className="font-semibold text-foreground mb-2">Gestão de Equipe</h3>
+                <p className="text-sm text-muted-foreground">Cadastre barbeiros e distribua os agendamentos automaticamente</p>
+              </div>
+
+              <div className="flex flex-col items-center p-6 rounded-xl bg-card/50 border border-border/50 backdrop-blur text-center">
+                <div className="w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+                  <Scissors className="w-7 h-7 text-primary" />
+                </div>
+                <h3 className="font-semibold text-foreground mb-2">Serviços Personalizados</h3>
+                <p className="text-sm text-muted-foreground">Configure seus serviços, preços e duração como quiser</p>
+              </div>
+
+              <div className="flex flex-col items-center p-6 rounded-xl bg-card/50 border border-border/50 backdrop-blur text-center">
+                <div className="w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+                  <MessageSquare className="w-7 h-7 text-primary" />
+                </div>
+                <h3 className="font-semibold text-foreground mb-2">Link Exclusivo</h3>
+                <p className="text-sm text-muted-foreground">Sua barbearia com link próprio para compartilhar com clientes</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* CTA */}
+        <section className="py-16 px-6">
+          <div className="max-w-2xl mx-auto text-center">
+            <h2 className="text-2xl md:text-3xl font-display font-bold text-foreground mb-4">
+              Pronto para começar?
+            </h2>
+            <p className="text-muted-foreground mb-8">
+              Crie sua barbearia em minutos e comece a receber agendamentos hoje mesmo.
+            </p>
+            <Link to="/register">
+              <Button variant="hero" size="lg">
+                Começar Agora
+                <ArrowRight className="w-5 h-5 ml-2" />
+              </Button>
+            </Link>
+          </div>
+        </section>
+      </main>
+
+      {/* Footer */}
+      <footer className="relative z-10 py-8 text-center text-sm text-muted-foreground border-t border-border/50">
+        <p>© {new Date().getFullYear()} Sistema de Agendamento. Todos os direitos reservados.</p>
+      </footer>
+    </div>
   );
 }
