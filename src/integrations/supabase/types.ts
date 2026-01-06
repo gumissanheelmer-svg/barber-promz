@@ -217,6 +217,7 @@ export type Database = {
           active: boolean
           approval_status: string
           background_color: string
+          business_type: string
           closing_time: string | null
           created_at: string
           id: string
@@ -235,6 +236,7 @@ export type Database = {
           active?: boolean
           approval_status?: string
           background_color?: string
+          business_type?: string
           closing_time?: string | null
           created_at?: string
           id?: string
@@ -253,6 +255,7 @@ export type Database = {
           active?: boolean
           approval_status?: string
           background_color?: string
+          business_type?: string
           closing_time?: string | null
           created_at?: string
           id?: string
