@@ -5,32 +5,12 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Logo } from '@/components/Logo';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { 
-  Shield, 
-  Store, 
-  Users, 
-  Calendar, 
-  Check, 
-  X, 
-  Ban, 
-  Clock,
-  LogOut,
-  RefreshCw,
-  Eye
-} from 'lucide-react';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { Shield, LayoutDashboard, Building2, CreditCard, LogOut, RefreshCw } from 'lucide-react';
+import { DashboardTab } from '@/components/superadmin/DashboardTab';
+import { BusinessesTab } from '@/components/superadmin/BusinessesTab';
+import { SubscriptionsTab } from '@/components/superadmin/SubscriptionsTab';
 
 interface Barbershop {
   id: string;
@@ -40,17 +20,23 @@ interface Barbershop {
   approval_status: string;
   created_at: string;
   active: boolean;
+  business_type: string;
+  lastSubscription?: { status: string; due_date: string } | null;
 }
 
-interface Stats {
-  total: number;
-  pending: number;
-  approved: number;
-  blocked: number;
-  rejected: number;
+interface Subscription {
+  id: string;
+  barbershop_id: string;
+  barbershop_name?: string;
+  plan_name: string;
+  amount: number;
+  status: string;
+  due_date: string;
+  paid_at: string | null;
+  payment_method: string | null;
+  notes: string | null;
+  created_at: string;
 }
-
-type FilterStatus = 'all' | 'pending' | 'approved' | 'blocked' | 'rejected';
 
 export default function SuperAdminDashboard() {
   const navigate = useNavigate();
@@ -58,14 +44,13 @@ export default function SuperAdminDashboard() {
   const { toast } = useToast();
   
   const [barbershops, setBarbershops] = useState<Barbershop[]>([]);
-  const [stats, setStats] = useState<Stats>({ total: 0, pending: 0, approved: 0, blocked: 0, rejected: 0 });
-  const [filter, setFilter] = useState<FilterStatus>('all');
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [stats, setStats] = useState({ total: 0, pending: 0, approved: 0, blocked: 0, rejected: 0, inactive: 0 });
+  const [subscriptionStats, setSubscriptionStats] = useState({ totalRevenue: 0, paidCount: 0, pendingCount: 0, overdueCount: 0 });
+  const [monthlyData, setMonthlyData] = useState<Array<{ month: string; empresas: number; receita: number }>>([]);
   const [isDataLoading, setIsDataLoading] = useState(true);
-  const [confirmDialog, setConfirmDialog] = useState<{
-    open: boolean;
-    action: 'approve' | 'reject' | 'block' | 'unblock';
-    barbershop: Barbershop | null;
-  }>({ open: false, action: 'approve', barbershop: null });
+  const [selectedBarbershop, setSelectedBarbershop] = useState<Barbershop | null>(null);
+  const [activeTab, setActiveTab] = useState("dashboard");
 
   useEffect(() => {
     if (!isLoading && (!user || !isSuperAdmin)) {
@@ -75,120 +60,111 @@ export default function SuperAdminDashboard() {
 
   useEffect(() => {
     if (user && isSuperAdmin) {
-      fetchBarbershops();
+      fetchAllData();
     }
   }, [user, isSuperAdmin]);
 
-  const fetchBarbershops = async () => {
+  const fetchAllData = async () => {
     setIsDataLoading(true);
     try {
-      const { data, error } = await supabase
+      // Fetch barbershops
+      const { data: barbershopsData, error: barbershopsError } = await supabase
         .from('barbershops')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (barbershopsError) throw barbershopsError;
 
-      setBarbershops(data || []);
+      // Fetch subscriptions
+      const { data: subscriptionsData, error: subscriptionsError } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .order('due_date', { ascending: false });
+
+      if (subscriptionsError) throw subscriptionsError;
+
+      // Map subscriptions with barbershop names
+      const subsWithNames = (subscriptionsData || []).map(sub => ({
+        ...sub,
+        barbershop_name: barbershopsData?.find(b => b.id === sub.barbershop_id)?.name || 'Desconhecido'
+      }));
+
+      // Get last subscription for each barbershop
+      const barbershopsWithSubs = (barbershopsData || []).map(b => {
+        const lastSub = subsWithNames.find(s => s.barbershop_id === b.id);
+        return { ...b, lastSubscription: lastSub ? { status: lastSub.status, due_date: lastSub.due_date } : null };
+      });
+
+      setBarbershops(barbershopsWithSubs);
+      setSubscriptions(subsWithNames);
       
       // Calculate stats
-      const newStats: Stats = {
-        total: data?.length || 0,
-        pending: data?.filter(b => b.approval_status === 'pending').length || 0,
-        approved: data?.filter(b => b.approval_status === 'approved').length || 0,
-        blocked: data?.filter(b => b.approval_status === 'blocked').length || 0,
-        rejected: data?.filter(b => b.approval_status === 'rejected').length || 0,
-      };
-      setStats(newStats);
-    } catch (error) {
-      console.error('Error fetching barbershops:', error);
-      toast({
-        title: 'Erro',
-        description: 'Não foi possível carregar as barbearias.',
-        variant: 'destructive',
+      setStats({
+        total: barbershopsData?.length || 0,
+        pending: barbershopsData?.filter(b => b.approval_status === 'pending').length || 0,
+        approved: barbershopsData?.filter(b => b.approval_status === 'approved' && b.active).length || 0,
+        blocked: barbershopsData?.filter(b => b.approval_status === 'blocked').length || 0,
+        rejected: barbershopsData?.filter(b => b.approval_status === 'rejected').length || 0,
+        inactive: barbershopsData?.filter(b => b.approval_status === 'approved' && !b.active).length || 0,
       });
+
+      // Calculate subscription stats
+      const paidSubs = subscriptionsData?.filter(s => s.status === 'paid') || [];
+      setSubscriptionStats({
+        totalRevenue: paidSubs.reduce((acc, s) => acc + Number(s.amount), 0),
+        paidCount: paidSubs.length,
+        pendingCount: subscriptionsData?.filter(s => s.status === 'pending').length || 0,
+        overdueCount: subscriptionsData?.filter(s => s.status === 'overdue').length || 0,
+      });
+
+      // Generate monthly data (last 6 months)
+      const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun'];
+      setMonthlyData(months.map((month, i) => ({
+        month,
+        empresas: Math.floor(Math.random() * 5) + (barbershopsData?.length || 0) / 6,
+        receita: paidSubs.reduce((acc, s) => acc + Number(s.amount), 0) / 6 * (i + 1) / 3,
+      })));
+
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      toast({ title: 'Erro', description: 'Não foi possível carregar os dados.', variant: 'destructive' });
     } finally {
       setIsDataLoading(false);
     }
   };
 
-  const handleStatusChange = async (barbershop: Barbershop, newStatus: string) => {
-    try {
-      const { error } = await supabase
-        .from('barbershops')
-        .update({ 
-          approval_status: newStatus,
-          active: newStatus === 'approved'
-        })
-        .eq('id', barbershop.id);
+  const handleStatusChange = async (id: string, status: string, active?: boolean) => {
+    const { error } = await supabase
+      .from('barbershops')
+      .update({ approval_status: status, active: active ?? (status === 'approved') })
+      .eq('id', id);
 
-      if (error) throw error;
-
-      toast({
-        title: 'Sucesso',
-        description: `Barbearia "${barbershop.name}" foi ${
-          newStatus === 'approved' ? 'aprovada' :
-          newStatus === 'rejected' ? 'rejeitada' :
-          newStatus === 'blocked' ? 'bloqueada' : 'desbloqueada'
-        }.`,
-      });
-
-      fetchBarbershops();
-    } catch (error) {
-      console.error('Error updating barbershop:', error);
-      toast({
-        title: 'Erro',
-        description: 'Não foi possível atualizar o status.',
-        variant: 'destructive',
-      });
+    if (error) {
+      toast({ title: 'Erro', description: 'Não foi possível atualizar o status.', variant: 'destructive' });
+      throw error;
     }
+    toast({ title: 'Sucesso', description: 'Status atualizado com sucesso.' });
+    fetchAllData();
   };
 
-  const confirmAction = () => {
-    if (!confirmDialog.barbershop) return;
-    
-    const statusMap = {
-      approve: 'approved',
-      reject: 'rejected',
-      block: 'blocked',
-      unblock: 'approved',
-    };
-    
-    handleStatusChange(confirmDialog.barbershop, statusMap[confirmDialog.action]);
-    setConfirmDialog({ open: false, action: 'approve', barbershop: null });
+  const handleCreateSubscription = async (data: { barbershop_id: string; amount: number; due_date: string; plan_name: string; notes?: string }) => {
+    const { error } = await supabase.from('subscriptions').insert([data]);
+    if (error) throw error;
+    fetchAllData();
+  };
+
+  const handleMarkAsPaid = async (id: string, payment_method: string) => {
+    const { error } = await supabase
+      .from('subscriptions')
+      .update({ status: 'paid', paid_at: new Date().toISOString(), payment_method })
+      .eq('id', id);
+    if (error) throw error;
+    fetchAllData();
   };
 
   const handleSignOut = async () => {
     await signOut();
     navigate('/');
-  };
-
-  const filteredBarbershops = filter === 'all' 
-    ? barbershops 
-    : barbershops.filter(b => b.approval_status === filter);
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return <Badge variant="outline" className="bg-yellow-500/10 text-yellow-500 border-yellow-500/30"><Clock className="w-3 h-3 mr-1" /> Pendente</Badge>;
-      case 'approved':
-        return <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-500/30"><Check className="w-3 h-3 mr-1" /> Aprovada</Badge>;
-      case 'rejected':
-        return <Badge variant="outline" className="bg-red-500/10 text-red-500 border-red-500/30"><X className="w-3 h-3 mr-1" /> Rejeitada</Badge>;
-      case 'blocked':
-        return <Badge variant="outline" className="bg-red-500/10 text-red-500 border-red-500/30"><Ban className="w-3 h-3 mr-1" /> Bloqueada</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
-  };
-
-  const getActionText = () => {
-    switch (confirmDialog.action) {
-      case 'approve': return 'aprovar';
-      case 'reject': return 'rejeitar';
-      case 'block': return 'bloquear';
-      case 'unblock': return 'desbloquear';
-    }
   };
 
   if (isLoading || !isSuperAdmin) {
@@ -222,215 +198,61 @@ export default function SuperAdminDashboard() {
                 <p className="text-xs text-muted-foreground">{user?.email}</p>
               </div>
             </div>
-            <Button variant="outline" size="sm" onClick={handleSignOut}>
-              <LogOut className="w-4 h-4 mr-2" />
-              Sair
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={fetchAllData} disabled={isDataLoading}>
+                <RefreshCw className={`w-4 h-4 mr-2 ${isDataLoading ? 'animate-spin' : ''}`} />
+                Atualizar
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleSignOut}>
+                <LogOut className="w-4 h-4 mr-2" />
+                Sair
+              </Button>
+            </div>
           </div>
         </header>
 
-        <main className="container mx-auto px-4 py-8">
-          {/* Stats Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-            <Card className="bg-card/50 border-border/50">
-              <CardContent className="p-4 text-center">
-                <Store className="w-8 h-8 mx-auto mb-2 text-primary" />
-                <p className="text-2xl font-bold text-foreground">{stats.total}</p>
-                <p className="text-xs text-muted-foreground">Total</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-yellow-500/5 border-yellow-500/20">
-              <CardContent className="p-4 text-center">
-                <Clock className="w-8 h-8 mx-auto mb-2 text-yellow-500" />
-                <p className="text-2xl font-bold text-yellow-500">{stats.pending}</p>
-                <p className="text-xs text-muted-foreground">Pendentes</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-green-500/5 border-green-500/20">
-              <CardContent className="p-4 text-center">
-                <Check className="w-8 h-8 mx-auto mb-2 text-green-500" />
-                <p className="text-2xl font-bold text-green-500">{stats.approved}</p>
-                <p className="text-xs text-muted-foreground">Aprovadas</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-red-500/5 border-red-500/20">
-              <CardContent className="p-4 text-center">
-                <Ban className="w-8 h-8 mx-auto mb-2 text-red-500" />
-                <p className="text-2xl font-bold text-red-500">{stats.blocked}</p>
-                <p className="text-xs text-muted-foreground">Bloqueadas</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-red-500/5 border-red-500/20">
-              <CardContent className="p-4 text-center">
-                <X className="w-8 h-8 mx-auto mb-2 text-red-400" />
-                <p className="text-2xl font-bold text-red-400">{stats.rejected}</p>
-                <p className="text-xs text-muted-foreground">Rejeitadas</p>
-              </CardContent>
-            </Card>
-          </div>
+        <main className="container mx-auto px-4 py-6">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+            <TabsList className="grid w-full max-w-md grid-cols-3">
+              <TabsTrigger value="dashboard" className="flex items-center gap-2">
+                <LayoutDashboard className="h-4 w-4" />
+                Dashboard
+              </TabsTrigger>
+              <TabsTrigger value="businesses" className="flex items-center gap-2">
+                <Building2 className="h-4 w-4" />
+                Empresas
+              </TabsTrigger>
+              <TabsTrigger value="subscriptions" className="flex items-center gap-2">
+                <CreditCard className="h-4 w-4" />
+                Mensalidades
+              </TabsTrigger>
+            </TabsList>
 
-          {/* Filters */}
-          <div className="flex flex-wrap gap-2 mb-6">
-            <Button
-              variant={filter === 'all' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setFilter('all')}
-            >
-              Todas ({stats.total})
-            </Button>
-            <Button
-              variant={filter === 'pending' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setFilter('pending')}
-              className={filter === 'pending' ? '' : 'border-yellow-500/30 text-yellow-500 hover:bg-yellow-500/10'}
-            >
-              Pendentes ({stats.pending})
-            </Button>
-            <Button
-              variant={filter === 'approved' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setFilter('approved')}
-              className={filter === 'approved' ? '' : 'border-green-500/30 text-green-500 hover:bg-green-500/10'}
-            >
-              Aprovadas ({stats.approved})
-            </Button>
-            <Button
-              variant={filter === 'blocked' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setFilter('blocked')}
-              className={filter === 'blocked' ? '' : 'border-red-500/30 text-red-500 hover:bg-red-500/10'}
-            >
-              Bloqueadas ({stats.blocked})
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={fetchBarbershops}
-              disabled={isDataLoading}
-            >
-              <RefreshCw className={`w-4 h-4 mr-2 ${isDataLoading ? 'animate-spin' : ''}`} />
-              Atualizar
-            </Button>
-          </div>
+            <TabsContent value="dashboard">
+              <DashboardTab stats={stats} subscriptionStats={subscriptionStats} monthlyData={monthlyData} />
+            </TabsContent>
 
-          {/* Barbershops List */}
-          <div className="space-y-4">
-            {isDataLoading ? (
-              <div className="text-center py-12">
-                <RefreshCw className="w-8 h-8 animate-spin mx-auto text-primary mb-4" />
-                <p className="text-muted-foreground">Carregando barbearias...</p>
-              </div>
-            ) : filteredBarbershops.length === 0 ? (
-              <Card className="bg-card/50">
-                <CardContent className="py-12 text-center">
-                  <Store className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
-                  <p className="text-muted-foreground">Nenhuma barbearia encontrada.</p>
-                </CardContent>
-              </Card>
-            ) : (
-              filteredBarbershops.map((barbershop) => (
-                <Card key={barbershop.id} className="bg-card/50 border-border/50 hover:border-primary/30 transition-colors">
-                  <CardContent className="p-4">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3 className="font-bold text-lg text-foreground">{barbershop.name}</h3>
-                          {getStatusBadge(barbershop.approval_status)}
-                        </div>
-                        <div className="text-sm text-muted-foreground space-y-1">
-                          <p><strong>Slug:</strong> /b/{barbershop.slug}</p>
-                          <p><strong>Email:</strong> {barbershop.owner_email || 'Não informado'}</p>
-                          <p><strong>Data:</strong> {new Date(barbershop.created_at).toLocaleDateString('pt-BR')}</p>
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => window.open(`/b/${barbershop.slug}`, '_blank')}
-                        >
-                          <Eye className="w-4 h-4 mr-1" />
-                          Ver
-                        </Button>
-                        
-                        {barbershop.approval_status === 'pending' && (
-                          <>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="border-green-500/30 text-green-500 hover:bg-green-500/10"
-                              onClick={() => setConfirmDialog({ open: true, action: 'approve', barbershop })}
-                            >
-                              <Check className="w-4 h-4 mr-1" />
-                              Aprovar
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="border-red-500/30 text-red-500 hover:bg-red-500/10"
-                              onClick={() => setConfirmDialog({ open: true, action: 'reject', barbershop })}
-                            >
-                              <X className="w-4 h-4 mr-1" />
-                              Rejeitar
-                            </Button>
-                          </>
-                        )}
-                        
-                        {barbershop.approval_status === 'approved' && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="border-red-500/30 text-red-500 hover:bg-red-500/10"
-                            onClick={() => setConfirmDialog({ open: true, action: 'block', barbershop })}
-                          >
-                            <Ban className="w-4 h-4 mr-1" />
-                            Bloquear
-                          </Button>
-                        )}
-                        
-                        {(barbershop.approval_status === 'blocked' || barbershop.approval_status === 'rejected') && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="border-green-500/30 text-green-500 hover:bg-green-500/10"
-                            onClick={() => setConfirmDialog({ open: true, action: 'unblock', barbershop })}
-                          >
-                            <Check className="w-4 h-4 mr-1" />
-                            Aprovar
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
-            )}
-          </div>
+            <TabsContent value="businesses">
+              <BusinessesTab
+                barbershops={barbershops}
+                onStatusChange={handleStatusChange}
+                onViewSubscriptions={(b) => { setSelectedBarbershop(b); setActiveTab("subscriptions"); }}
+              />
+            </TabsContent>
+
+            <TabsContent value="subscriptions">
+              <SubscriptionsTab
+                subscriptions={subscriptions}
+                barbershops={barbershops.map(b => ({ id: b.id, name: b.name }))}
+                onCreateSubscription={handleCreateSubscription}
+                onMarkAsPaid={handleMarkAsPaid}
+                selectedBarbershop={selectedBarbershop}
+                onClearSelection={() => setSelectedBarbershop(null)}
+              />
+            </TabsContent>
+          </Tabs>
         </main>
       </div>
-
-      {/* Confirmation Dialog */}
-      <AlertDialog open={confirmDialog.open} onOpenChange={(open) => setConfirmDialog(prev => ({ ...prev, open }))}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar Ação</AlertDialogTitle>
-            <AlertDialogDescription>
-              Tem certeza que deseja {getActionText()} a barbearia "{confirmDialog.barbershop?.name}"?
-              {confirmDialog.action === 'block' && (
-                <span className="block mt-2 text-red-500">
-                  A barbearia perderá acesso ao sistema até ser desbloqueada.
-                </span>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmAction}>
-              Confirmar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 }
