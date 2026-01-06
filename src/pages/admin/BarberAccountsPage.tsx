@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { useAdminBarbershop } from '@/hooks/useAdminBarbershop';
 import { 
   UserCheck,
   UserX,
@@ -52,10 +53,16 @@ interface BarberAccount {
 export default function BarberAccountsPage() {
   const { toast } = useToast();
   const { barbershopId } = useAuth();
+  const { barbershop } = useAdminBarbershop();
   const [accounts, setAccounts] = useState<BarberAccount[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedAccount, setSelectedAccount] = useState<BarberAccount | null>(null);
   const [actionType, setActionType] = useState<'approve' | 'reject' | 'block' | null>(null);
+
+  const businessType = barbershop?.business_type || 'barbearia';
+  const isBarbershop = businessType === 'barbearia';
+  const professionalsLabel = isBarbershop ? 'Barbeiros' : 'Profissionais';
+  const professionalLabel = isBarbershop ? 'barbeiros' : 'profissionais';
 
   useEffect(() => {
     if (barbershopId) {
@@ -173,9 +180,9 @@ export default function BarberAccountsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-display text-foreground">Contas de Barbeiros</h1>
+          <h1 className="text-3xl font-display text-foreground">Contas de {professionalsLabel}</h1>
           <p className="text-muted-foreground mt-1">
-            Gerencie as solicitações de acesso dos barbeiros
+            Gerencie as solicitações de acesso dos {professionalLabel}
           </p>
         </div>
         <Button variant="outline" onClick={fetchAccounts} disabled={isLoading}>

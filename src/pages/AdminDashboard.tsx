@@ -13,17 +13,24 @@ import {
   LayoutDashboard,
   UserCheck,
   Menu,
-  Wallet
+  Wallet,
+  Sparkles
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Helmet } from 'react-helmet-async';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 
-const navItems = [
+interface NavItem {
+  to: string;
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+}
+
+const getNavItems = (professionalsLabel: string, isBarbershop: boolean): NavItem[] => [
   { to: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/admin/dashboard/appointments', icon: Calendar, label: 'Agendamentos' },
-  { to: '/admin/dashboard/barbers', icon: UserCheck, label: 'Barbeiros' },
+  { to: '/admin/dashboard/barbers', icon: isBarbershop ? UserCheck : Sparkles, label: professionalsLabel },
   { to: '/admin/dashboard/accounts', icon: Users, label: 'Contas' },
   { to: '/admin/dashboard/services', icon: Scissors, label: 'Serviços' },
   { to: '/admin/dashboard/clients', icon: Users, label: 'Clientes' },
@@ -32,11 +39,12 @@ const navItems = [
 ];
 
 interface NavContentProps {
+  navItems: NavItem[];
   onItemClick?: () => void;
   onSignOut: () => void;
 }
 
-const NavContent = ({ onItemClick, onSignOut }: NavContentProps) => (
+const NavContent = ({ navItems, onItemClick, onSignOut }: NavContentProps) => (
   <>
     <div className="p-6 border-b border-border">
       <Logo size="sm" />
@@ -83,8 +91,12 @@ export default function AdminDashboard() {
   const { barbershop } = useAdminBarbershop();
   const isMobile = useIsMobile();
   const [menuOpen, setMenuOpen] = useState(false);
-
   const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
+
+  const businessType = barbershop?.business_type || 'barbearia';
+  const isBarbershop = businessType === 'barbearia';
+  const professionalsLabel = isBarbershop ? 'Barbeiros' : 'Profissionais';
+  const navItems = getNavItems(professionalsLabel, isBarbershop);
 
   useEffect(() => {
     if (!isLoading) {
@@ -142,7 +154,7 @@ export default function AdminDashboard() {
                   </Button>
                 </SheetTrigger>
                 <SheetContent side="left" className="w-64 p-0 flex flex-col">
-                  <NavContent onItemClick={closeMenu} onSignOut={handleSignOut} />
+                  <NavContent navItems={navItems} onItemClick={closeMenu} onSignOut={handleSignOut} />
                 </SheetContent>
               </Sheet>
               <Logo size="sm" />
@@ -154,7 +166,7 @@ export default function AdminDashboard() {
         {/* Desktop Sidebar */}
         {!isMobile && (
           <aside className="w-64 bg-card border-r border-border flex flex-col fixed h-full">
-            <NavContent onSignOut={handleSignOut} />
+            <NavContent navItems={navItems} onSignOut={handleSignOut} />
           </aside>
         )}
 
