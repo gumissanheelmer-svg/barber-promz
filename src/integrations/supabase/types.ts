@@ -447,6 +447,7 @@ export type Database = {
       create_barbershop: {
         Args: {
           p_background_color?: string
+          p_business_type?: string
           p_logo_url?: string
           p_name: string
           p_owner_email?: string
@@ -470,6 +471,7 @@ export type Database = {
         Args: { p_slug: string }
         Returns: {
           background_color: string
+          business_type: string
           closing_time: string
           id: string
           logo_url: string

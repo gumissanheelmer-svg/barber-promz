@@ -9,29 +9,27 @@ import { supabase } from '@/integrations/supabase/client';
 import { Service, Barber, Appointment, WorkingHours } from '@/lib/types';
 import { format, addDays, isBefore, startOfDay } from 'date-fns';
 import { pt } from 'date-fns/locale';
-import { Calendar as CalendarIcon, Clock, User, Phone, Scissors, Check, MessageCircle } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, User, Phone, Scissors, Check, MessageCircle, Sparkles } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useBarbershop } from '@/hooks/useBarbershop';
+import { useBusinessType } from '@/hooks/useBusinessType';
 
 interface BookingFormProps {
   onBack: () => void;
   barbershopId?: string;
 }
 
-type AppointmentStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
+type AppointmentStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed' | 'in_progress';
 
 // Validação de telefone moçambicano (84, 85, 86, 87, 82, 83)
 const validateMozambicanPhone = (phone: string): { isValid: boolean; formatted: string; error?: string } => {
-  // Remove todos os caracteres não numéricos
   const digits = phone.replace(/\D/g, '');
   
-  // Verifica se começa com 258 (código do país)
   let localNumber = digits;
   if (digits.startsWith('258')) {
     localNumber = digits.slice(3);
   }
   
-  // Deve ter exatamente 9 dígitos
   if (localNumber.length !== 9) {
     return { 
       isValid: false, 
@@ -40,7 +38,6 @@ const validateMozambicanPhone = (phone: string): { isValid: boolean; formatted: 
     };
   }
   
-  // Deve começar com 82, 83, 84, 85, 86 ou 87 (operadoras moçambicanas)
   const validPrefixes = ['82', '83', '84', '85', '86', '87'];
   const prefix = localNumber.slice(0, 2);
   
@@ -52,7 +49,6 @@ const validateMozambicanPhone = (phone: string): { isValid: boolean; formatted: 
     };
   }
   
-  // Formata o número com código do país
   const formatted = `+258${localNumber}`;
   return { isValid: true, formatted };
 };
@@ -60,9 +56,11 @@ const validateMozambicanPhone = (phone: string): { isValid: boolean; formatted: 
 export function BookingForm({ onBack, barbershopId }: BookingFormProps) {
   const { toast } = useToast();
   const { barbershop } = useBarbershop();
+  const { professionalLabel, shouldFilterProfessionalsByService, isBarbershop } = useBusinessType();
   const [step, setStep] = useState(1);
   const [services, setServices] = useState<Service[]>([]);
   const [barbers, setBarbers] = useState<Barber[]>([]);
+  const [filteredBarbers, setFilteredBarbers] = useState<Barber[]>([]);
   const [existingAppointments, setExistingAppointments] = useState<Appointment[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -70,7 +68,6 @@ export function BookingForm({ onBack, barbershopId }: BookingFormProps) {
   const [whatsappNumber, setWhatsappNumber] = useState('+258840000000');
   const [phoneError, setPhoneError] = useState<string>('');
 
-  // Use barbershopId from props or from context
   const currentBarbershopId = barbershopId || barbershop?.id;
 
   const [formData, setFormData] = useState({
@@ -94,10 +91,18 @@ export function BookingForm({ onBack, barbershopId }: BookingFormProps) {
     }
   }, [formData.barberId, formData.appointmentDate]);
 
+  // Filter professionals by service for salons
+  useEffect(() => {
+    if (shouldFilterProfessionalsByService && formData.serviceId && currentBarbershopId) {
+      fetchProfessionalsForService();
+    } else {
+      setFilteredBarbers(barbers);
+    }
+  }, [formData.serviceId, barbers, shouldFilterProfessionalsByService]);
+
   const fetchData = async () => {
     if (!currentBarbershopId) return;
 
-    // Use secure RPC functions to fetch only non-sensitive data
     const [servicesRes, barbersRes] = await Promise.all([
       supabase.rpc('get_public_services', { p_barbershop_id: currentBarbershopId }),
       supabase.rpc('get_public_barbers', { p_barbershop_id: currentBarbershopId }),
@@ -105,22 +110,52 @@ export function BookingForm({ onBack, barbershopId }: BookingFormProps) {
 
     if (servicesRes.data) setServices(servicesRes.data as Service[]);
     if (barbersRes.data) {
-      // Map to Barber type - phone is intentionally excluded for security
       const mappedBarbers: Barber[] = barbersRes.data.map((b: { id: string; name: string; working_hours: unknown }) => ({
         id: b.id,
         name: b.name,
-        phone: null, // Not fetched - hidden for security
+        phone: null,
         active: true,
         working_hours: b.working_hours as WorkingHours,
         created_at: '',
         updated_at: '',
       }));
       setBarbers(mappedBarbers);
+      setFilteredBarbers(mappedBarbers);
     }
     
-    // Get whatsapp from barbershop
     if (barbershop?.whatsapp_number) {
       setWhatsappNumber(barbershop.whatsapp_number);
+    }
+  };
+
+  const fetchProfessionalsForService = async () => {
+    if (!formData.serviceId || !currentBarbershopId) return;
+
+    // Query service_professionals table directly since RPC might not be in types yet
+    const { data: spData, error: spError } = await supabase
+      .from('service_professionals')
+      .select('professional_id')
+      .eq('service_id', formData.serviceId)
+      .eq('barbershop_id', currentBarbershopId);
+
+    if (spError) {
+      console.error('Error fetching service professionals:', spError);
+      setFilteredBarbers(barbers);
+      return;
+    }
+
+    if (spData && spData.length > 0) {
+      const professionalIds = spData.map(sp => sp.professional_id);
+      const filtered = barbers.filter(b => professionalIds.includes(b.id));
+      if (filtered.length > 0) {
+        setFilteredBarbers(filtered);
+      } else {
+        // Fallback to all barbers if no match
+        setFilteredBarbers(barbers);
+      }
+    } else {
+      // No professionals assigned, show all (fallback for salons without service mapping)
+      setFilteredBarbers(barbers);
     }
   };
 
@@ -136,17 +171,13 @@ export function BookingForm({ onBack, barbershopId }: BookingFormProps) {
       .neq('status', 'cancelled');
 
     if (data) {
-      const mappedAppointments = data.map(a => ({
-        ...a,
-        status: a.status as AppointmentStatus
-      }));
-      setExistingAppointments(mappedAppointments);
+      setExistingAppointments(data as Appointment[]);
     }
   };
 
   const generateTimeSlots = () => {
     const slots: string[] = [];
-    const selectedBarber = barbers.find(b => b.id === formData.barberId);
+    const selectedBarber = filteredBarbers.find(b => b.id === formData.barberId);
     
     if (!selectedBarber || !formData.appointmentDate) return slots;
 
@@ -210,11 +241,11 @@ export function BookingForm({ onBack, barbershopId }: BookingFormProps) {
 
       if (error) throw error;
 
-      const mappedAppointment: Appointment = {
+      const mappedAppointment = {
         ...data,
         notes: data.notes || null,
-        status: data.status as AppointmentStatus
-      };
+        status: data.status as Appointment['status']
+      } as Appointment;
       
       setCreatedAppointment(mappedAppointment);
       setIsSuccess(true);
@@ -238,18 +269,19 @@ export function BookingForm({ onBack, barbershopId }: BookingFormProps) {
   const getWhatsAppLink = () => {
     if (!createdAppointment) return '#';
 
-    const barberName = barbers.find(b => b.id === createdAppointment.barber_id)?.name || 'N/A';
+    const barberName = filteredBarbers.find(b => b.id === createdAppointment.barber_id)?.name || 
+                       barbers.find(b => b.id === createdAppointment.barber_id)?.name || 'N/A';
     const service = services.find(s => s.id === createdAppointment.service_id);
     const serviceName = service?.name || 'N/A';
     const servicePrice = service?.price || 0;
     const formattedDate = format(new Date(createdAppointment.appointment_date), 'dd/MM/yyyy');
-    const barbershopName = barbershop?.name || 'Barbearia';
+    const barbershopName = barbershop?.name || 'Estabelecimento';
 
     const message = encodeURIComponent(
       `Olá! Fiz um agendamento na ${barbershopName}\n\n` +
       `👤 Cliente: ${createdAppointment.client_name}\n` +
-      `✂️ Barbeiro: ${barberName}\n` +
-      `💈 Serviço: ${serviceName}\n` +
+      `👩‍💼 ${professionalLabel}: ${barberName}\n` +
+      `💇‍♀️ Serviço: ${serviceName}\n` +
       `📅 Data: ${formattedDate}\n` +
       `⏰ Hora: ${createdAppointment.appointment_time}\n` +
       `💰 Valor: ${servicePrice.toFixed(0)} MZN\n\n` +
@@ -261,7 +293,8 @@ export function BookingForm({ onBack, barbershopId }: BookingFormProps) {
   };
 
   if (isSuccess && createdAppointment) {
-    const barberName = barbers.find(b => b.id === createdAppointment.barber_id)?.name;
+    const barberName = filteredBarbers.find(b => b.id === createdAppointment.barber_id)?.name ||
+                       barbers.find(b => b.id === createdAppointment.barber_id)?.name;
     const serviceName = services.find(s => s.id === createdAppointment.service_id)?.name;
 
     return (
@@ -285,7 +318,7 @@ export function BookingForm({ onBack, barbershopId }: BookingFormProps) {
                 <span className="text-foreground font-medium">{serviceName}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Barbeiro:</span>
+                <span className="text-muted-foreground">{professionalLabel}:</span>
                 <span className="text-foreground font-medium">{barberName}</span>
               </div>
               <div className="flex justify-between">
@@ -322,6 +355,7 @@ export function BookingForm({ onBack, barbershopId }: BookingFormProps) {
   }
 
   const timeSlots = generateTimeSlots();
+  const ServiceIcon = isBarbershop ? Scissors : Sparkles;
 
   return (
     <div className="min-h-screen bg-background py-8 px-4">
@@ -420,12 +454,12 @@ export function BookingForm({ onBack, barbershopId }: BookingFormProps) {
           </Card>
         )}
 
-        {/* Step 2: Service & Barber */}
+        {/* Step 2: Service & Professional */}
         {step === 2 && (
           <Card className="border-border/50 bg-card/80 backdrop-blur animate-fade-in">
             <CardHeader>
               <CardTitle className="text-xl font-display flex items-center gap-2">
-                <Scissors className="w-5 h-5 text-primary" />
+                <ServiceIcon className="w-5 h-5 text-primary" />
                 Escolha o serviço
               </CardTitle>
             </CardHeader>
@@ -434,7 +468,9 @@ export function BookingForm({ onBack, barbershopId }: BookingFormProps) {
                 <Label>Serviço</Label>
                 <Select
                   value={formData.serviceId}
-                  onValueChange={(value) => setFormData({ ...formData, serviceId: value })}
+                  onValueChange={(value) => {
+                    setFormData({ ...formData, serviceId: value, barberId: '' });
+                  }}
                 >
                   <SelectTrigger className="bg-input border-border">
                     <SelectValue placeholder="Selecione um serviço" />
@@ -455,33 +491,48 @@ export function BookingForm({ onBack, barbershopId }: BookingFormProps) {
               </div>
 
               <div className="space-y-2">
-                <Label>Barbeiro</Label>
+                <Label>{professionalLabel}</Label>
                 <Select
                   value={formData.barberId}
                   onValueChange={(value) => setFormData({ ...formData, barberId: value })}
+                  disabled={shouldFilterProfessionalsByService && !formData.serviceId}
                 >
                   <SelectTrigger className="bg-input border-border">
-                    <SelectValue placeholder="Selecione um barbeiro" />
+                    <SelectValue placeholder={
+                      shouldFilterProfessionalsByService && !formData.serviceId 
+                        ? 'Selecione um serviço primeiro' 
+                        : `Selecione um ${professionalLabel.toLowerCase()}`
+                    } />
                   </SelectTrigger>
                   <SelectContent>
-                    {barbers.map((barber) => (
+                    {filteredBarbers.map((barber) => (
                       <SelectItem key={barber.id} value={barber.id}>
                         {barber.name}
                       </SelectItem>
                     ))}
+                    {filteredBarbers.length === 0 && (
+                      <div className="px-2 py-4 text-center text-muted-foreground text-sm">
+                        Nenhum {professionalLabel.toLowerCase()} disponível para este serviço
+                      </div>
+                    )}
                   </SelectContent>
                 </Select>
+                {shouldFilterProfessionalsByService && formData.serviceId && filteredBarbers.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Nenhum profissional habilitado para este serviço. Entre em contato com o estabelecimento.
+                  </p>
+                )}
               </div>
 
               <div className="flex gap-2 mt-4">
-                <Button variant="outline" className="flex-1" onClick={() => setStep(1)}>
+                <Button variant="outline" onClick={() => setStep(1)} className="flex-1">
                   Voltar
                 </Button>
                 <Button
                   variant="gold"
-                  className="flex-1"
                   onClick={() => setStep(3)}
                   disabled={!formData.serviceId || !formData.barberId}
+                  className="flex-1"
                 >
                   Continuar
                 </Button>
@@ -496,35 +547,28 @@ export function BookingForm({ onBack, barbershopId }: BookingFormProps) {
             <CardHeader>
               <CardTitle className="text-xl font-display flex items-center gap-2">
                 <CalendarIcon className="w-5 h-5 text-primary" />
-                Escolha a data e horário
+                Data e horário
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>Data</Label>
-                <div className="flex justify-center">
-                  <Calendar
-                    mode="single"
-                    selected={formData.appointmentDate}
-                    onSelect={(date) => setFormData({ ...formData, appointmentDate: date, appointmentTime: '' })}
-                    disabled={(date) => isBefore(date, startOfDay(new Date())) || isBefore(date, addDays(new Date(), -1))}
-                    locale={pt}
-                    className="rounded-md border border-border bg-card"
-                  />
-                </div>
+              <div className="flex justify-center">
+                <Calendar
+                  mode="single"
+                  selected={formData.appointmentDate}
+                  onSelect={(date) => setFormData({ ...formData, appointmentDate: date, appointmentTime: '' })}
+                  disabled={(date) => isBefore(date, startOfDay(new Date())) || date > addDays(new Date(), 30)}
+                  className="rounded-md border border-border"
+                  locale={pt}
+                />
               </div>
 
               {formData.appointmentDate && (
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2">
                     <Clock className="w-4 h-4 text-primary" />
-                    Horário disponível
+                    Horários disponíveis
                   </Label>
-                  {timeSlots.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-4">
-                      Nenhum horário disponível nesta data.
-                    </p>
-                  ) : (
+                  {timeSlots.length > 0 ? (
                     <div className="grid grid-cols-4 gap-2">
                       {timeSlots.map((time) => (
                         <Button
@@ -538,19 +582,23 @@ export function BookingForm({ onBack, barbershopId }: BookingFormProps) {
                         </Button>
                       ))}
                     </div>
+                  ) : (
+                    <p className="text-center text-muted-foreground py-4">
+                      {professionalLabel} não trabalha neste dia ou todos os horários estão ocupados.
+                    </p>
                   )}
                 </div>
               )}
 
               <div className="flex gap-2 mt-4">
-                <Button variant="outline" className="flex-1" onClick={() => setStep(2)}>
+                <Button variant="outline" onClick={() => setStep(2)} className="flex-1">
                   Voltar
                 </Button>
                 <Button
                   variant="gold"
-                  className="flex-1"
                   onClick={handleSubmit}
                   disabled={!formData.appointmentDate || !formData.appointmentTime || isLoading}
+                  className="flex-1"
                 >
                   {isLoading ? 'Agendando...' : 'Confirmar'}
                 </Button>

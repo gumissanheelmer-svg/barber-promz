@@ -6,9 +6,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
-import { Calendar, Search, MessageCircle, Check, X, Filter } from 'lucide-react';
+import { Calendar, Search, MessageCircle, Check, X, Filter, Play } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { useAdminBarbershop } from '@/hooks/useAdminBarbershop';
 
 interface AppointmentWithDetails {
   id: string;
@@ -25,12 +26,38 @@ interface AppointmentWithDetails {
 export default function AppointmentsList() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const { barbershop } = useAdminBarbershop();
   const [appointments, setAppointments] = useState<AppointmentWithDetails[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [barbershopId, setBarbershopId] = useState<string | null>(null);
   const [whatsappNumber, setWhatsappNumber] = useState('+258840000000');
+
+  const businessType = barbershop?.business_type || 'barbearia';
+  const isBarbershop = businessType === 'barbearia';
+  const professionalLabel = isBarbershop ? 'Barbeiro' : 'Profissional';
+
+  // Status options based on business type
+  const getStatusOptions = () => {
+    if (isBarbershop) {
+      return [
+        { value: 'all', label: 'Todos' },
+        { value: 'pending', label: 'Pendentes' },
+        { value: 'confirmed', label: 'Confirmados' },
+        { value: 'completed', label: 'Concluídos' },
+        { value: 'cancelled', label: 'Cancelados' },
+      ];
+    }
+    return [
+      { value: 'all', label: 'Todos' },
+      { value: 'pending', label: 'Pendentes' },
+      { value: 'confirmed', label: 'Confirmados' },
+      { value: 'in_progress', label: 'Em Atendimento' },
+      { value: 'completed', label: 'Concluídos' },
+      { value: 'cancelled', label: 'Cancelados' },
+    ];
+  };
 
   useEffect(() => {
     if (user) {
@@ -118,11 +145,11 @@ export default function AppointmentsList() {
       `Olá ${apt.client_name}!\n\n` +
       `Confirmamos seu agendamento:\n\n` +
       `Serviço: ${apt.service?.name}\n` +
-      `Barbeiro: ${apt.barber?.name}\n` +
+      `${professionalLabel}: ${apt.barber?.name}\n` +
       `Data: ${formattedDate}\n` +
       `Hora: ${apt.appointment_time}\n` +
       `Valor: ${apt.service?.price?.toFixed(0) || 0} MZN\n\n` +
-      `Aguardamos você! ✂️`
+      `Aguardamos você! ✨`
     );
     const cleanNumber = apt.client_phone.replace(/\D/g, '');
     return `https://wa.me/${cleanNumber}?text=${message}`;
@@ -139,16 +166,18 @@ export default function AppointmentsList() {
     const styles: Record<string, string> = {
       pending: 'bg-yellow-500/20 text-yellow-500',
       confirmed: 'bg-green-500/20 text-green-500',
+      in_progress: 'bg-purple-500/20 text-purple-500',
       cancelled: 'bg-red-500/20 text-red-500',
       completed: 'bg-blue-500/20 text-blue-500',
     };
     const labels: Record<string, string> = {
       pending: 'Pendente',
       confirmed: 'Confirmado',
+      in_progress: 'Em Atendimento',
       cancelled: 'Cancelado',
       completed: 'Concluído',
     };
-    return <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[status]}`}>{labels[status]}</span>;
+    return <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[status] || 'bg-muted text-muted-foreground'}`}>{labels[status] || status}</span>;
   };
 
   return (
@@ -176,11 +205,11 @@ export default function AppointmentsList() {
                 <SelectValue placeholder="Filtrar por status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="pending">Pendentes</SelectItem>
-                <SelectItem value="confirmed">Confirmados</SelectItem>
-                <SelectItem value="completed">Concluídos</SelectItem>
-                <SelectItem value="cancelled">Cancelados</SelectItem>
+                {getStatusOptions().map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -245,7 +274,28 @@ export default function AppointmentsList() {
                         </Button>
                       </>
                     )}
-                    {apt.status === 'confirmed' && (
+                    {apt.status === 'confirmed' && !isBarbershop && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => updateStatus(apt.id, 'in_progress')}
+                        className="text-purple-500 border-purple-500/50 hover:bg-purple-500/10"
+                      >
+                        <Play className="w-4 h-4 mr-1" />
+                        Iniciar
+                      </Button>
+                    )}
+                    {apt.status === 'confirmed' && isBarbershop && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => updateStatus(apt.id, 'completed')}
+                        className="text-blue-500 border-blue-500/50 hover:bg-blue-500/10"
+                      >
+                        Concluir
+                      </Button>
+                    )}
+                    {apt.status === 'in_progress' && (
                       <Button
                         size="sm"
                         variant="outline"

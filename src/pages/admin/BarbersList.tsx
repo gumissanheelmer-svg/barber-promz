@@ -6,9 +6,10 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
-import { UserCheck, Plus, Edit2, Trash2 } from 'lucide-react';
+import { UserCheck, Plus, Edit2, Trash2, Scissors, Sparkles } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { useAdminBarbershop } from '@/hooks/useAdminBarbershop';
 
 interface Barber {
   id: string;
@@ -20,12 +21,19 @@ interface Barber {
 export default function BarbersList() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const { barbershop } = useAdminBarbershop();
   const [barbers, setBarbers] = useState<Barber[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingBarber, setEditingBarber] = useState<Barber | null>(null);
   const [formData, setFormData] = useState({ name: '', phone: '', active: true });
   const [barbershopId, setBarbershopId] = useState<string | null>(null);
+
+  const businessType = barbershop?.business_type || 'barbearia';
+  const isBarbershop = businessType === 'barbearia';
+  const professionalLabel = isBarbershop ? 'Barbeiro' : 'Profissional';
+  const professionalsLabel = isBarbershop ? 'Barbeiros' : 'Profissionais';
+  const ProfessionalIcon = isBarbershop ? Scissors : Sparkles;
 
   useEffect(() => {
     if (user) {
@@ -89,7 +97,7 @@ export default function BarbersList() {
       if (error) {
         toast({ title: 'Erro', description: 'Não foi possível atualizar.', variant: 'destructive' });
       } else {
-        toast({ title: 'Sucesso', description: 'Barbeiro atualizado.' });
+        toast({ title: 'Sucesso', description: `${professionalLabel} atualizado.` });
         setIsDialogOpen(false);
         fetchBarbers();
       }
@@ -106,7 +114,7 @@ export default function BarbersList() {
       if (error) {
         toast({ title: 'Erro', description: 'Não foi possível criar.', variant: 'destructive' });
       } else {
-        toast({ title: 'Sucesso', description: 'Barbeiro criado.' });
+        toast({ title: 'Sucesso', description: `${professionalLabel} criado.` });
         setIsDialogOpen(false);
         fetchBarbers();
       }
@@ -114,14 +122,14 @@ export default function BarbersList() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Tem certeza que deseja excluir este barbeiro?')) return;
+    if (!confirm(`Tem certeza que deseja excluir este ${professionalLabel.toLowerCase()}?`)) return;
 
     const { error } = await supabase.from('barbers').delete().eq('id', id);
 
     if (error) {
       toast({ title: 'Erro', description: 'Não foi possível excluir.', variant: 'destructive' });
     } else {
-      toast({ title: 'Sucesso', description: 'Barbeiro excluído.' });
+      toast({ title: 'Sucesso', description: `${professionalLabel} excluído.` });
       fetchBarbers();
     }
   };
@@ -150,18 +158,18 @@ export default function BarbersList() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-display font-bold text-foreground">Barbeiros</h1>
+        <h1 className="text-3xl font-display font-bold text-foreground">{professionalsLabel}</h1>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button variant="gold" onClick={() => openDialog()}>
               <Plus className="w-4 h-4 mr-2" />
-              Novo Barbeiro
+              Novo {professionalLabel}
             </Button>
           </DialogTrigger>
           <DialogContent className="bg-card border-border">
             <DialogHeader>
               <DialogTitle className="font-display">
-                {editingBarber ? 'Editar Barbeiro' : 'Novo Barbeiro'}
+                {editingBarber ? `Editar ${professionalLabel}` : `Novo ${professionalLabel}`}
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-4">
@@ -204,8 +212,8 @@ export default function BarbersList() {
       <Card className="border-border/50 bg-card/80">
         <CardHeader>
           <CardTitle className="font-display flex items-center gap-2">
-            <UserCheck className="w-5 h-5 text-primary" />
-            Lista de Barbeiros ({barbers.length})
+            <ProfessionalIcon className="w-5 h-5 text-primary" />
+            Lista de {professionalsLabel} ({barbers.length})
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -216,7 +224,7 @@ export default function BarbersList() {
               ))}
             </div>
           ) : barbers.length === 0 ? (
-            <p className="text-muted-foreground text-center py-8">Nenhum barbeiro cadastrado.</p>
+            <p className="text-muted-foreground text-center py-8">Nenhum {professionalLabel.toLowerCase()} cadastrado.</p>
           ) : (
             <div className="space-y-4">
               {barbers.map((barber) => (

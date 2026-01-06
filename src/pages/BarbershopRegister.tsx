@@ -8,7 +8,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Scissors, Upload, Eye, ArrowLeft, Loader2 } from 'lucide-react';
+import { Scissors, Upload, Eye, ArrowLeft, Loader2, Sparkles, Store } from 'lucide-react';
+
+type BusinessType = 'barbearia' | 'salao' | 'salao_barbearia';
 
 interface FormData {
   // Owner info
@@ -20,6 +22,7 @@ interface FormData {
   name: string;
   slug: string;
   whatsappNumber: string;
+  businessType: BusinessType;
   // Theme
   primaryColor: string;
   secondaryColor: string;
@@ -44,6 +47,7 @@ export default function BarbershopRegister() {
     name: '',
     slug: '',
     whatsappNumber: '',
+    businessType: 'barbearia',
     primaryColor: '#D4AF37',
     secondaryColor: '#1a1a2e',
     backgroundColor: '#0f0f1a',
@@ -115,7 +119,7 @@ export default function BarbershopRegister() {
     if (!formData.name.trim() || !formData.slug.trim()) {
       toast({
         title: "Campos obrigatórios",
-        description: "Preencha o nome e slug da barbearia",
+        description: "Preencha o nome e slug do estabelecimento",
         variant: "destructive",
       });
       return false;
@@ -129,6 +133,24 @@ export default function BarbershopRegister() {
       return false;
     }
     return true;
+  };
+
+  const getBusinessTypeLabel = () => {
+    switch (formData.businessType) {
+      case 'barbearia': return 'Barbearia';
+      case 'salao': return 'Salão de Beleza';
+      case 'salao_barbearia': return 'Salão & Barbearia';
+      default: return 'Estabelecimento';
+    }
+  };
+
+  const getBusinessTypeIcon = () => {
+    switch (formData.businessType) {
+      case 'barbearia': return <Scissors className="w-6 h-6" style={{ color: formData.backgroundColor }} />;
+      case 'salao': return <Sparkles className="w-6 h-6" style={{ color: formData.backgroundColor }} />;
+      case 'salao_barbearia': return <Store className="w-6 h-6" style={{ color: formData.backgroundColor }} />;
+      default: return <Scissors className="w-6 h-6" style={{ color: formData.backgroundColor }} />;
+    }
   };
 
   const handleSubmit = async () => {
@@ -292,6 +314,7 @@ export default function BarbershopRegister() {
           p_background_color: formData.backgroundColor,
           p_text_color: formData.textColor,
           p_owner_email: formData.ownerEmail,
+          p_business_type: formData.businessType,
         });
 
       if (shopError) {
@@ -379,12 +402,17 @@ export default function BarbershopRegister() {
             className="w-12 h-12 rounded-full flex items-center justify-center"
             style={{ backgroundColor: formData.primaryColor }}
           >
-            <Scissors className="w-6 h-6" style={{ color: formData.backgroundColor }} />
+            {getBusinessTypeIcon()}
           </div>
         )}
-        <h3 style={{ color: formData.textColor }} className="font-bold">
-          {formData.name || 'Nome da Barbearia'}
-        </h3>
+        <div>
+          <h3 style={{ color: formData.textColor }} className="font-bold">
+            {formData.name || 'Nome do Estabelecimento'}
+          </h3>
+          <p style={{ color: formData.textColor }} className="text-xs opacity-70">
+            {getBusinessTypeLabel()}
+          </p>
+        </div>
       </div>
       <div 
         className="rounded p-2 text-center text-sm font-medium"
@@ -503,14 +531,78 @@ export default function BarbershopRegister() {
               </div>
             )}
 
-            {/* Step 2: Barbershop Info */}
+            {/* Step 2: Business Info */}
             {step === 2 && (
               <div className="space-y-4">
+                {/* Business Type Selection */}
+                <div className="space-y-3">
+                  <Label>Tipo de estabelecimento *</Label>
+                  <div className="grid grid-cols-1 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, businessType: 'barbearia' }))}
+                      className={`p-4 rounded-lg border-2 transition-all text-left flex items-center gap-3 ${
+                        formData.businessType === 'barbearia' 
+                          ? 'border-primary bg-primary/10' 
+                          : 'border-border hover:border-primary/50'
+                      }`}
+                    >
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                        formData.businessType === 'barbearia' ? 'bg-primary' : 'bg-muted'
+                      }`}>
+                        <Scissors className={`w-5 h-5 ${formData.businessType === 'barbearia' ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
+                      </div>
+                      <div>
+                        <p className="font-medium">Barbearia</p>
+                        <p className="text-xs text-muted-foreground">Cortes, barbas e tratamentos masculinos</p>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, businessType: 'salao' }))}
+                      className={`p-4 rounded-lg border-2 transition-all text-left flex items-center gap-3 ${
+                        formData.businessType === 'salao' 
+                          ? 'border-primary bg-primary/10' 
+                          : 'border-border hover:border-primary/50'
+                      }`}
+                    >
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                        formData.businessType === 'salao' ? 'bg-primary' : 'bg-muted'
+                      }`}>
+                        <Sparkles className={`w-5 h-5 ${formData.businessType === 'salao' ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
+                      </div>
+                      <div>
+                        <p className="font-medium">Salão de Beleza</p>
+                        <p className="text-xs text-muted-foreground">Cabelo, manicure, maquiagem e mais</p>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, businessType: 'salao_barbearia' }))}
+                      className={`p-4 rounded-lg border-2 transition-all text-left flex items-center gap-3 ${
+                        formData.businessType === 'salao_barbearia' 
+                          ? 'border-primary bg-primary/10' 
+                          : 'border-border hover:border-primary/50'
+                      }`}
+                    >
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                        formData.businessType === 'salao_barbearia' ? 'bg-primary' : 'bg-muted'
+                      }`}>
+                        <Store className={`w-5 h-5 ${formData.businessType === 'salao_barbearia' ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
+                      </div>
+                      <div>
+                        <p className="font-medium">Salão & Barbearia</p>
+                        <p className="text-xs text-muted-foreground">Serviços completos para todos</p>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
                 <div className="space-y-2">
-                  <Label htmlFor="name">Nome da barbearia *</Label>
+                  <Label htmlFor="name">Nome do estabelecimento *</Label>
                   <Input
                     id="name"
-                    placeholder="Minha Barbearia"
+                    placeholder={formData.businessType === 'barbearia' ? 'Minha Barbearia' : 'Meu Salão'}
                     value={formData.name}
                     onChange={(e) => handleInputChange('name', e.target.value)}
                   />
@@ -521,7 +613,7 @@ export default function BarbershopRegister() {
                     <span className="text-muted-foreground text-sm">/b/</span>
                     <Input
                       id="slug"
-                      placeholder="minha-barbearia"
+                      placeholder="meu-estabelecimento"
                       value={formData.slug}
                       onChange={(e) => handleInputChange('slug', e.target.value.toLowerCase())}
                     />

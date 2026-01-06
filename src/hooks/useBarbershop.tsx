@@ -14,6 +14,7 @@ export interface Barbershop {
   opening_time: string | null;
   closing_time: string | null;
   active: boolean;
+  business_type: 'barbearia' | 'salao' | 'salao_barbearia';
 }
 
 interface BarbershopContextType {
@@ -57,6 +58,7 @@ export function BarbershopProvider({ children }: { children: ReactNode }) {
       setBarbershop({
         ...barbershopData,
         active: true, // We only get active barbershops
+        business_type: barbershopData.business_type || 'barbearia',
       } as Barbershop);
       setIsLoading(false);
       return true;
