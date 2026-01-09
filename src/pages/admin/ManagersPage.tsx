@@ -16,7 +16,10 @@ import {
   Mail,
   Phone,
   Shield,
-  AlertCircle
+  AlertCircle,
+  Clock,
+  CheckCircle,
+  XCircle
 } from 'lucide-react';
 import {
   Dialog,
@@ -48,6 +51,7 @@ interface Manager {
   email: string;
   phone: string | null;
   active: boolean;
+  status: 'pending' | 'active' | 'blocked';
   created_at: string;
 }
 
@@ -124,6 +128,35 @@ export default function ManagersPage() {
     setIsCreating(true);
 
     try {
+      // Check if email already exists as manager
+      const { data: existingManager } = await supabase
+        .from('managers')
+        .select('id, status, active')
+        .eq('email', formData.email.trim().toLowerCase())
+        .eq('barbershop_id', barbershopId)
+        .maybeSingle();
+
+      if (existingManager) {
+        if (existingManager.status === 'pending') {
+          toast({
+            title: 'Gerente já cadastrado',
+            description: 'Este gerente já foi criado e está aguardando ativação.',
+            variant: 'destructive',
+          });
+          setIsCreating(false);
+          return;
+        }
+        if (existingManager.status === 'active' && existingManager.active) {
+          toast({
+            title: 'Erro',
+            description: 'Já existe um gerente ativo com este email.',
+            variant: 'destructive',
+          });
+          setIsCreating(false);
+          return;
+        }
+      }
+
       // 1. Create user account via signUp
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: formData.email.trim(),
@@ -143,16 +176,18 @@ export default function ManagersPage() {
 
       const newUserId = signUpData.user.id;
 
-      // 2. Create manager record
+      // 2. Create manager record with status = pending
       const { error: managerError } = await supabase
         .from('managers')
         .insert({
           user_id: newUserId,
           barbershop_id: barbershopId,
           name: formData.name.trim(),
-          email: formData.email.trim(),
+          email: formData.email.trim().toLowerCase(),
           phone: formData.phone.trim() || null,
           created_by: user.id,
+          status: 'pending',
+          active: true,
         });
 
       if (managerError) {
@@ -174,7 +209,7 @@ export default function ManagersPage() {
 
       toast({
         title: 'Gerente criado!',
-        description: `${formData.name} foi adicionado como gerente.`,
+        description: `${formData.name} foi criado e aguarda ativação.`,
       });
 
       setFormData({ name: '', email: '', phone: '', password: '' });
@@ -189,6 +224,56 @@ export default function ManagersPage() {
       });
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  const handleActivateManager = async (manager: Manager) => {
+    try {
+      const { error } = await supabase
+        .from('managers')
+        .update({ status: 'active' })
+        .eq('id', manager.id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Gerente ativado!',
+        description: `${manager.name} agora pode acessar o sistema.`,
+      });
+
+      fetchManagers();
+    } catch (err: any) {
+      console.error('Error activating manager:', err);
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível ativar o gerente.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleBlockManager = async (manager: Manager) => {
+    try {
+      const { error } = await supabase
+        .from('managers')
+        .update({ status: 'blocked' })
+        .eq('id', manager.id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Gerente bloqueado',
+        description: `${manager.name} foi bloqueado.`,
+      });
+
+      fetchManagers();
+    } catch (err: any) {
+      console.error('Error blocking manager:', err);
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível bloquear o gerente.',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -341,7 +426,80 @@ export default function ManagersPage() {
         </CardContent>
       </Card>
 
-      {/* Managers List */}
+      {/* Pending Managers */}
+      {managers.filter(m => m.active && m.status === 'pending').length > 0 && (
+        <Card className="border-amber-500/30 bg-amber-500/5">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-amber-600">
+              <Clock className="w-5 h-5" />
+              Gerentes Pendentes de Ativação
+            </CardTitle>
+            <CardDescription>
+              {managers.filter(m => m.active && m.status === 'pending').length} gerente(s) aguardando ativação
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {managers.filter(m => m.active && m.status === 'pending').map((manager) => (
+                <div
+                  key={manager.id}
+                  className="flex items-center gap-4 p-4 border border-amber-500/30 rounded-lg bg-card"
+                >
+                  <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center">
+                    <Clock className="w-6 h-6 text-amber-500" />
+                  </div>
+                  
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className="font-medium text-foreground truncate">
+                        {manager.name}
+                      </h4>
+                      <Badge variant="outline" className="border-amber-500/50 text-amber-600">
+                        Pendente
+                      </Badge>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Mail className="w-3 h-3" />
+                        {manager.email}
+                      </span>
+                      {manager.phone && (
+                        <span className="flex items-center gap-1">
+                          <Phone className="w-3 h-3" />
+                          {manager.phone}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-green-600 border-green-600/50 hover:bg-green-600/10"
+                      onClick={() => handleActivateManager(manager)}
+                    >
+                      <CheckCircle className="w-4 h-4 mr-1" />
+                      Ativar
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-destructive border-destructive/50 hover:bg-destructive/10"
+                      onClick={() => handleBlockManager(manager)}
+                    >
+                      <XCircle className="w-4 h-4 mr-1" />
+                      Bloquear
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Active Managers List */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -349,7 +507,7 @@ export default function ManagersPage() {
             Gerentes Ativos
           </CardTitle>
           <CardDescription>
-            {managers.filter(m => m.active).length} gerente(s) ativo(s)
+            {managers.filter(m => m.active && m.status === 'active').length} gerente(s) ativo(s)
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -365,14 +523,16 @@ export default function ManagersPage() {
                 </div>
               ))}
             </div>
-          ) : managers.filter(m => m.active).length === 0 ? (
+          ) : managers.filter(m => m.active && m.status === 'active').length === 0 ? (
             <div className="text-center py-12">
               <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-medium text-foreground mb-2">
-                Nenhum gerente cadastrado
+                Nenhum gerente ativo
               </h3>
               <p className="text-muted-foreground mb-4">
-                Adicione um gerente para ajudar na administração do seu negócio
+                {managers.filter(m => m.active && m.status === 'pending').length > 0 
+                  ? 'Ative os gerentes pendentes acima ou adicione um novo gerente'
+                  : 'Adicione um gerente para ajudar na administração do seu negócio'}
               </p>
               <Button variant="gold" onClick={() => setIsDialogOpen(true)}>
                 <UserPlus className="w-4 h-4 mr-2" />
@@ -381,7 +541,7 @@ export default function ManagersPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {managers.filter(m => m.active).map((manager) => (
+              {managers.filter(m => m.active && m.status === 'active').map((manager) => (
                 <div
                   key={manager.id}
                   className="flex items-center gap-4 p-4 border border-border rounded-lg hover:bg-muted/50 transition-colors"
@@ -395,8 +555,8 @@ export default function ManagersPage() {
                       <h4 className="font-medium text-foreground truncate">
                         {manager.name}
                       </h4>
-                      <Badge className="bg-primary/20 text-primary border-primary/30">
-                        Gerente
+                      <Badge className="bg-green-500/20 text-green-600 border-green-500/30">
+                        Ativo
                       </Badge>
                     </div>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
@@ -416,14 +576,25 @@ export default function ManagersPage() {
                     </div>
                   </div>
 
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-destructive hover:bg-destructive/10"
-                    onClick={() => setManagerToDelete(manager)}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-amber-600 border-amber-600/50 hover:bg-amber-600/10"
+                      onClick={() => handleBlockManager(manager)}
+                    >
+                      <XCircle className="w-4 h-4 mr-1" />
+                      Bloquear
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-destructive hover:bg-destructive/10"
+                      onClick={() => setManagerToDelete(manager)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
