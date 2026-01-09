@@ -133,9 +133,7 @@ export function BookingForm({ onBack, barbershopId, backgroundImageUrl, backgrou
       const [servicesRes, professionalsRes, mappingsRes] = await Promise.all([
         supabase.rpc('get_valid_services', { p_barbershop_id: currentBarbershopId }),
         supabase.rpc('get_public_professionals', { p_business_id: currentBarbershopId }),
-        supabase.from('service_professionals')
-          .select('service_id, professional_id')
-          .eq('barbershop_id', currentBarbershopId)
+        supabase.rpc('get_service_professional_mappings', { p_barbershop_id: currentBarbershopId })
       ]);
 
       // Processar serviços

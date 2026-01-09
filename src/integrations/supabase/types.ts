@@ -783,6 +783,13 @@ export type Database = {
           price: number
         }[]
       }
+      get_service_professional_mappings: {
+        Args: { p_barbershop_id: string }
+        Returns: {
+          professional_id: string
+          service_id: string
+        }[]
+      }
       get_user_barbershop_id: { Args: { _user_id: string }; Returns: string }
       get_user_business_id: { Args: { _user_id: string }; Returns: string }
       get_valid_services: {
