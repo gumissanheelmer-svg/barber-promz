@@ -677,6 +677,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_view_client_data: {
+        Args: { p_appointment_id: string }
+        Returns: boolean
+      }
       create_barbershop: {
         Args: {
           p_background_color?: string
@@ -692,6 +696,15 @@ export type Database = {
         }
         Returns: string
       }
+      get_appointment_summary_for_professional: {
+        Args: { p_barber_id: string; p_date: string }
+        Returns: {
+          appointment_time: string
+          duration: number
+          service_name: string
+          status: string
+        }[]
+      }
       get_available_professionals: {
         Args: { p_barbershop_id: string; p_date: string }
         Returns: {
@@ -699,7 +712,6 @@ export type Database = {
           id: string
           is_day_off: boolean
           name: string
-          specialty: string
           working_hours: Json
         }[]
       }
