@@ -195,7 +195,7 @@ export default function ManagersPage() {
     try {
       const { error } = await supabase
         .from('managers')
-        .update({ active: true } as any)
+        .update({ active: true, status: 'active' } as any)
         .eq('id', manager.id);
 
       if (error) throw error;
@@ -220,7 +220,7 @@ export default function ManagersPage() {
     try {
       const { error } = await supabase
         .from('managers')
-        .update({ active: false } as any)
+        .update({ active: false, status: 'blocked' } as any)
         .eq('id', manager.id);
 
       if (error) throw error;
@@ -391,7 +391,7 @@ export default function ManagersPage() {
       </Card>
 
       {/* Pending Managers */}
-      {managers.filter(m => m.active && m.status === 'pending').length > 0 && (
+      {managers.filter(m => m.status === 'pending').length > 0 && (
         <Card className="border-amber-500/30 bg-amber-500/5">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-amber-600">
@@ -399,12 +399,12 @@ export default function ManagersPage() {
               Gerentes Pendentes de Ativação
             </CardTitle>
             <CardDescription>
-              {managers.filter(m => m.active && m.status === 'pending').length} gerente(s) aguardando ativação
+              {managers.filter(m => m.status === 'pending').length} gerente(s) aguardando ativação
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {managers.filter(m => m.active && m.status === 'pending').map((manager) => (
+              {managers.filter(m => m.status === 'pending').map((manager) => (
                 <div
                   key={manager.id}
                   className="flex items-center gap-4 p-4 border border-amber-500/30 rounded-lg bg-card"
